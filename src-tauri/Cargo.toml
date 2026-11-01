@@ -3,6 +3,10 @@ name = "p2p-social"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "p2p_social_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

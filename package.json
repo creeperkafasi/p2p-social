@@ -4,10 +4,15 @@
   "private": true,
   "description": "Twitter-like P2P social MVP: Tauri shell + Bare backend on the Holepunch stack",
   "scripts": {
+    "tauri": "tauri",
     "dev": "cd src-tauri && cargo run",
     "build": "tauri build",
     "backend": "bare backend/index.js",
-    "test": "node test/e2e.js"
+    "test": "node test/e2e.js",
+    "android:init": "tauri android init --skip-targets-install --ci",
+    "android:build": "./scripts/build-android.sh aarch64",
+    "android:build:x64": "./scripts/build-android.sh x86_64",
+    "android:dev": "tauri android dev"
   },
   "dependencies": {
     "b4a": "^1.9.0",
@@ -24,5 +29,9 @@
     "@tauri-apps/cli": "^2.12.4",
     "bare": "^1.36.2",
     "qrcode": "^1.5.4"
+  },
+  "optionalDependencies": {
+    "bare-runtime-android-arm64": "^1.36.0",
+    "bare-runtime-android-x64": "^1.36.0"
   }
 }

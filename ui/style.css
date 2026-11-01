@@ -1373,7 +1373,7 @@ dialog::backdrop {
   }
 }
 
-@media (max-width: 740px) {
+@media (max-width: 740px) and (min-width: 601px) {
   .sidebar {
     width: 68px;
     padding: 12px 8px;
@@ -1397,5 +1397,94 @@ dialog::backdrop {
   .nav-item {
     padding: 12px;
     justify-content: center;
+  }
+}
+
+/* Native-feel Mobile Phone Layout (Android / iOS) */
+@media (max-width: 600px) {
+  body {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+  }
+  .layout {
+    flex-direction: column;
+    max-width: 100%;
+  }
+  main {
+    max-width: 100%;
+    border-left: 0;
+    border-right: 0;
+  }
+  .sidebar {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: calc(56px + env(safe-area-inset-bottom, 0px));
+    padding: 6px 12px calc(6px + env(safe-area-inset-bottom, 0px));
+    background: var(--glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--line);
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 999;
+  }
+  .logo, .sidebar-footer {
+    display: none !important;
+  }
+  .nav-item {
+    padding: 8px 10px;
+    border-radius: var(--radius-full);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .nav-item .label {
+    display: none;
+  }
+  .nav-item svg {
+    width: 24px;
+    height: 24px;
+  }
+  .post-btn {
+    position: fixed;
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    right: 18px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    margin-top: 0;
+    z-index: 998;
+    box-shadow: 0 4px 18px rgba(29, 155, 240, 0.45);
+    display: grid;
+    place-items: center;
+    padding: 0;
+  }
+  .post-btn .label {
+    display: none;
+  }
+  .post-btn .post-icon-sm {
+    display: block;
+    width: 24px;
+    height: 24px;
+  }
+  .compose textarea {
+    font-size: 16px; /* Prevents auto-zoom in mobile WebView */
+  }
+  .post-actions {
+    max-width: 100%;
+  }
+  .dms-container {
+    flex-direction: column;
+    height: auto;
+  }
+  .dms-list {
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    max-height: 200px;
   }
 }

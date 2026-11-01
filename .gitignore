@@ -1,4 +1,15 @@
 node_modules/
 src-tauri/target/
-src-tauri/gen/
 storage/
+
+# Android build caches, build outputs & heavy assets (recreated by scripts/build-android.sh)
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/build/
+src-tauri/gen/android/app/build/
+src-tauri/gen/android/buildSrc/build/
+src-tauri/gen/android/buildSrc/.gradle/
+src-tauri/gen/android/buildSrc/.kotlin/
+src-tauri/gen/android/local.properties
+src-tauri/gen/android/app/src/main/assets/backend.zip
+src-tauri/gen/android/app/src/main/jniLibs/
+src-tauri/gen/android/.tauri/

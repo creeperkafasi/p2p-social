@@ -61,6 +61,40 @@ npm test
 
 Runs a 2-peer end-to-end test on a local DHT testnet (`hyperdht/testnet`), verifying post replication, likes, reposts, threaded replies, profiles, polls, voting, DMs, and clean shutdown.
 
+## Android App
+
+The Android version packages the entire Holepunch P2P stack into a native Android APK using Tauri 2 and the official Bare runtime.
+
+### Android Architecture
+
+- **Holepunch Bare Runtime (`libbare.so`):** Android API 29+ enforces strict W^X restrictions preventing execution of binaries in app data directories (`filesDir`). To comply natively, the stripped Bare runtime executable is packaged into `jniLibs/<abi>/libbare.so`, where Android OS automatically extracts it into `nativeLibraryDir` with executable (`0755`) permissions.
+- **Backend Bundle (`backend.zip`):** The JS backend and production dependencies (including precompiled `.bare` native addons for `udx-native`, `sodium-native`, `bare-pipe`, `bare-fs`) are bundled in `assets/backend.zip`.
+- **First Launch Extraction:** On initial app launch, `MainActivity.kt` unpacks `backend.zip` into internal app storage (`filesDir`) and sets environment variables (`BARE_BIN`, `P2P_SOCIAL_ROOT`, `P2P_SOCIAL_STORAGE`).
+- **Rust Tauri Bridge:** Rust spawns the native Bare runtime as a background process and routes JSON-RPC messages between the Android WebView UI and Bare over stdin/stdout pipes.
+- **Mobile Responsive UI:** Responsive CSS styles (`@media (max-width: 600px)`) activate mobile bottom tab navigation, floating compose action button (FAB), touch-friendly modals, and edge-to-edge layout.
+
+### Build APK
+
+Ensure Java 21 and the Android SDK/NDK are installed, then run:
+
+```sh
+# For physical devices (ARM64)
+npm run android:build
+
+# For Android Studio x86_64 emulator
+npm run android:build:x64
+```
+
+The assembled APK is placed at:
+```
+src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+```
+
+Install to a connected Android phone or emulator:
+```sh
+adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+```
+
 ### Commands reference (stdio protocol)
 
 - `post { text, media?, poll?, quoteOf?, replyTo? }`
