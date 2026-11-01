@@ -1649,6 +1649,16 @@ function openNetworkModal() {
 const DEFAULT_REPO = 'creeperkafasi/p2p-social'
 let availableUpdate = null
 
+function getValidRepo(inputVal) {
+  let r = (inputVal || localStorage.getItem('p2p_github_repo') || DEFAULT_REPO).trim()
+  r = r.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '')
+  if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(r)) {
+    r = DEFAULT_REPO
+  }
+  localStorage.setItem('p2p_github_repo', r)
+  return r
+}
+
 function getAppVersion() {
   if (window.AndroidUpdater?.getOtaVersion) {
     try {
@@ -1672,8 +1682,8 @@ function openUpdateModal() {
   const currentVerEl = document.getElementById('update-current-version')
   const repoInput = document.getElementById('update-repo-input')
   if (currentVerEl) currentVerEl.textContent = `v${currentVer}`
-  if (repoInput && !repoInput.value) {
-    repoInput.value = localStorage.getItem('p2p_github_repo') || DEFAULT_REPO
+  if (repoInput) {
+    repoInput.value = getValidRepo(repoInput.value)
   }
   updateDialog.showModal()
 }
@@ -1730,9 +1740,8 @@ async function checkUpdatesAction(interactive = true) {
   const startBtn = document.getElementById('btn-start-update')
   const progressBox = document.getElementById('update-progress-box')
 
-  let repo = repoInput?.value?.trim() || localStorage.getItem('p2p_github_repo') || DEFAULT_REPO
-  repo = repo.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '')
-  localStorage.setItem('p2p_github_repo', repo)
+  const repo = getValidRepo(repoInput?.value)
+  if (repoInput) repoInput.value = repo
 
   if (btn) {
     btn.disabled = true
@@ -1911,7 +1920,7 @@ window.__onOtaError = (err) => {
 async function checkSilentOta() {
   if (!window.AndroidUpdater?.checkForUpdates) return
   try {
-    const repo = localStorage.getItem('p2p_github_repo') || DEFAULT_REPO
+    const repo = getValidRepo()
     const raw = window.AndroidUpdater.checkForUpdates(repo)
     const updateInfo = JSON.parse(raw)
     if (updateInfo.success && updateInfo.hasOtaUpdate && updateInfo.otaUrl) {
