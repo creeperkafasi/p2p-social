@@ -271,7 +271,7 @@
           <label>
             <span class="label-text">GitHub Repository</span>
             <div style="display:flex;gap:6px;align-items:center">
-              <input id="update-repo-input" placeholder="creeperkafasi/p2p-social" style="flex:1" onfocus="this.select()" />
+              <input id="update-repo-input" placeholder="creeperkafasi/p2p-social" style="flex:1" />
               <button type="button" class="outline btn-sm" id="btn-clear-repo" title="Reset default repo">↺</button>
             </div>
           </label>
@@ -315,6 +315,81 @@
         <button type="button" class="btn-sm outline" id="btn-ota-dismiss">✕</button>
       </div>
     </div>
+
+    <!-- Post Options Bottom Sheet -->
+    <dialog id="post-opts-sheet" class="bottom-sheet">
+      <div class="sheet-drag-handle"></div>
+      <div class="sheet-header">
+        <div class="sheet-post-summary" id="sheet-post-summary"></div>
+        <button type="button" class="sheet-close-btn" data-close-modal>×</button>
+      </div>
+      <div class="sheet-body" id="sheet-opts-content"></div>
+      <div class="sheet-footer">
+        <button type="button" class="sheet-cancel-btn" data-close-modal>Cancel</button>
+      </div>
+    </dialog>
+
+    <!-- Report Post Bottom Sheet -->
+    <dialog id="report-modal" class="bottom-sheet">
+      <div class="sheet-drag-handle"></div>
+      <div class="sheet-header">
+        <button type="button" class="sheet-back-btn" id="btn-report-back">←</button>
+        <h3>Report Post</h3>
+        <button type="button" class="sheet-close-btn" data-close-modal>×</button>
+      </div>
+      <div class="report-sheet-body">
+        <p class="muted sheet-notice">Peer-to-peer reporting requires a lightweight Proof of Work (~150ms) to ensure spam resistance.</p>
+        <div class="report-reasons-list">
+          <label class="report-reason-item">
+            <input type="radio" name="report-reason" value="spam" checked />
+            <div class="report-reason-text">
+              <span class="report-reason-title">🤖 Spam or Bot Activity</span>
+              <span class="report-reason-desc">Automated bulk posting, fake engagement, tag stuffing</span>
+            </div>
+          </label>
+          <label class="report-reason-item">
+            <input type="radio" name="report-reason" value="scam" />
+            <div class="report-reason-text">
+              <span class="report-reason-title">💸 Scam, Phishing, or Fraud</span>
+              <span class="report-reason-desc">Malicious links, crypto airdrop scams, financial fraud</span>
+            </div>
+          </label>
+          <label class="report-reason-item">
+            <input type="radio" name="report-reason" value="abuse" />
+            <div class="report-reason-text">
+              <span class="report-reason-title">⚠️ Harassment or Abuse</span>
+              <span class="report-reason-desc">Threats, hate speech, bullying, or targeted abuse</span>
+            </div>
+          </label>
+          <label class="report-reason-item">
+            <input type="radio" name="report-reason" value="misinfo" />
+            <div class="report-reason-text">
+              <span class="report-reason-title">📢 Misinformation / Impersonation</span>
+              <span class="report-reason-desc">Fake identity, impersonating another peer, harmful hoaxes</span>
+            </div>
+          </label>
+        </div>
+        <div class="report-sheet-actions">
+          <button type="button" class="danger-btn" id="btn-submit-report">Submit Report (Mine PoW)</button>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Confirmation Modal -->
+    <dialog id="confirm-modal" class="bottom-sheet">
+      <div class="sheet-drag-handle"></div>
+      <div class="sheet-header">
+        <h3 id="confirm-modal-title">Confirm Action</h3>
+        <button type="button" class="sheet-close-btn" data-close-modal>×</button>
+      </div>
+      <div class="sheet-body" style="padding: 16px 20px;">
+        <p id="confirm-modal-msg" style="font-size: 15px; line-height: 1.4; color: var(--fg);"></p>
+      </div>
+      <div class="sheet-footer" style="display:flex;gap:10px;">
+        <button type="button" class="sheet-cancel-btn" style="flex:1" data-close-modal>Cancel</button>
+        <button type="button" class="danger-btn" style="flex:1; border-radius: var(--radius-full);" id="btn-confirm-action">Confirm</button>
+      </div>
+    </dialog>
 
     <!-- Lightbox Modal for Images -->
     <dialog id="lightbox">

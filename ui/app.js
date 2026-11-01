@@ -25,17 +25,45 @@ const networkDialog = document.getElementById('network-modal')
 const updateDialog = document.getElementById('update-modal')
 const lightboxDialog = document.getElementById('lightbox')
 const toastEl = document.getElementById('toast')
+const postOptsDialog = document.getElementById('post-opts-sheet')
+const reportDialog = document.getElementById('report-modal')
+const confirmDialog = document.getElementById('confirm-modal')
+
+let activePostOptsId = null
+let pendingConfirmCallback = null
+
+// Backdrop click dismiss for bottom sheets
+;[postOptsDialog, reportDialog, confirmDialog].forEach((dlg) => {
+  if (!dlg) return
+  dlg.addEventListener('click', (e) => {
+    const rect = dlg.getBoundingClientRect()
+    const isInDialog =
+      rect.top <= e.clientY && e.clientY <= rect.top + rect.height && rect.left <= e.clientX && e.clientX <= rect.left + rect.width
+    if (!isInDialog) {
+      dlg.close()
+    }
+  })
+})
 
 // --- Theme Management ---
-let currentTheme = localStorage.getItem('p2p_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+let currentTheme = localStorage.getItem('p2p_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') || 'dark'
 document.documentElement.setAttribute('data-theme', currentTheme)
+
+function updateThemeElements() {
+  document.querySelectorAll('.theme-toggle-btn').forEach((btn) => {
+    btn.innerHTML = currentTheme === 'dark' ? '☀️' : '🌙'
+    btn.setAttribute('title', currentTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode')
+  })
+  const sidebarBtn = document.getElementById('btn-theme-toggle')
+  if (sidebarBtn) sidebarBtn.textContent = `Theme: ${currentTheme === 'dark' ? 'Dark' : 'Light'}`
+}
+updateThemeElements()
 
 function toggleTheme() {
   currentTheme = currentTheme === 'dark' ? 'light' : 'dark'
   document.documentElement.setAttribute('data-theme', currentTheme)
   localStorage.setItem('p2p_theme', currentTheme)
-  const btn = document.getElementById('btn-theme-toggle')
-  if (btn) btn.textContent = `Theme: ${currentTheme === 'dark' ? 'Dark' : 'Light'}`
+  updateThemeElements()
 }
 
 // --- Bridge ---
@@ -610,6 +638,115 @@ function composeHtml(opts = {}) {
     </form>`
 }
 
+// --- Post Options Bottom Sheet & Confirm Actions ---
+
+function openPostOpts(postId) {
+  const post = (state?.posts || []).find((p) => p.id === postId)
+  if (!post || !postOptsDialog) return
+  activePostOptsId = postId
+  const isMine = post.author === state?.me
+  const isF = following().has(post.author)
+  const isB = isBlocked(post.author)
+  const isM = isMuted(post.author)
+
+  const summaryEl = document.getElementById('sheet-post-summary')
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      ${avatar(post.author)}
+      <div style="min-width:0">
+        <div class="sheet-post-author-name">${esc(nameOf(post.author))}</div>
+        <div class="sheet-post-author-key">@${short(post.author)}</div>
+      </div>`
+  }
+
+  const contentEl = document.getElementById('sheet-opts-content')
+  if (contentEl) {
+    const items = [
+      `
+      <button class="sheet-action-item" data-sheet-action="copy-text">
+        <div class="sheet-action-left">
+          <span class="sheet-action-icon">📋</span>
+          <span>Copy Post Text</span>
+        </div>
+        <span class="sheet-hint">Markdown text</span>
+      </button>`,
+      `
+      <button class="sheet-action-item" data-sheet-action="copy-key">
+        <div class="sheet-action-left">
+          <span class="sheet-action-icon">🔑</span>
+          <span>Copy Author Key</span>
+        </div>
+        <span class="sheet-hint monospace">@${short(post.author)}</span>
+      </button>`,
+      `
+      <button class="sheet-action-item" data-sheet-action="share">
+        <div class="sheet-action-left">
+          <span class="sheet-action-icon">🔗</span>
+          <span>Share Post</span>
+        </div>
+        <span class="sheet-hint">Copy Post ID</span>
+      </button>`
+    ]
+
+    if (isMine) {
+      items.push(`
+        <button class="sheet-action-item danger" data-sheet-action="delete">
+          <div class="sheet-action-left">
+            <span class="sheet-action-icon">🗑️</span>
+            <span>Delete Post</span>
+          </div>
+          <span class="sheet-hint danger">Delete from your feed</span>
+        </button>`)
+    } else {
+      items.push(`
+        <button class="sheet-action-item" data-sheet-action="toggle-follow">
+          <div class="sheet-action-left">
+            <span class="sheet-action-icon">${isF ? '👤' : '➕'}</span>
+            <span>${isF ? 'Unfollow' : 'Follow'} @${short(post.author)}</span>
+          </div>
+        </button>`)
+
+      items.push(`
+        <button class="sheet-action-item" data-sheet-action="toggle-mute">
+          <div class="sheet-action-left">
+            <span class="sheet-action-icon">${isM ? '🔊' : '🔇'}</span>
+            <span>${isM ? 'Unmute' : 'Mute'} @${short(post.author)}</span>
+          </div>
+        </button>`)
+
+      items.push(`
+        <button class="sheet-action-item danger" data-sheet-action="toggle-block">
+          <div class="sheet-action-left">
+            <span class="sheet-action-icon">🚫</span>
+            <span>${isB ? 'Unblock' : 'Block'} @${short(post.author)}</span>
+          </div>
+        </button>`)
+
+      items.push(`
+        <button class="sheet-action-item danger" data-sheet-action="open-report">
+          <div class="sheet-action-left">
+            <span class="sheet-action-icon">🚩</span>
+            <span>Report Post</span>
+          </div>
+          <span class="sheet-badge">PoW Moderation</span>
+        </button>`)
+    }
+
+    contentEl.innerHTML = items.join('')
+  }
+
+  postOptsDialog.showModal()
+}
+
+function showConfirm(title, message, onConfirm) {
+  const titleEl = document.getElementById('confirm-modal-title')
+  const msgEl = document.getElementById('confirm-modal-msg')
+  if (titleEl) titleEl.textContent = title
+  if (msgEl) msgEl.textContent = message
+  pendingConfirmCallback = onConfirm
+  confirmDialog?.showModal()
+}
+
 // --- Views ---
 
 const views = {
@@ -635,7 +772,10 @@ const views = {
     return `
       <div class="header">
         <span>Home</span>
-        <button class="icon-btn-ghost" id="btn-open-updates" title="In-App Updates">🔄</button>
+        <div class="header-actions">
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
+          <button class="icon-btn-ghost" id="btn-open-updates" title="In-App Updates">🔄</button>
+        </div>
       </div>
       <div class="tabs-bar">
         <button class="tab-btn${activeSub === 'forYou' ? ' active' : ''}" data-subtab="forYou">⚡ For You</button>
@@ -677,6 +817,9 @@ const views = {
     return `
       <div class="header">
         <span>Explore</span>
+        <div class="header-actions">
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
+        </div>
       </div>
       <div class="tabs-bar">
         <button class="tab-btn${activeSub === 'all' ? ' active' : ''}" data-subtab="all">All</button>
@@ -776,6 +919,9 @@ const views = {
     return `
       <div class="header">
         <span>Notifications</span>
+        <div class="header-actions">
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
+        </div>
       </div>
       <div class="tabs-bar">
         <button class="tab-btn${activeSub === 'all' ? ' active' : ''}" data-subtab="all">All</button>
@@ -824,6 +970,9 @@ const views = {
     return `
       <div class="header">
         <span>Direct Messages</span>
+        <div class="header-actions">
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
+        </div>
       </div>
       <div class="dms-container">
         <div class="dms-list">
@@ -866,6 +1015,9 @@ const views = {
     return `
       <div class="header">
         <span>Bookmarks</span>
+        <div class="header-actions">
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
+        </div>
       </div>
       <div class="feed">
         ${
@@ -913,6 +1065,9 @@ const views = {
             <div>${esc(nameOf(key))}</div>
             <div class="muted" style="font-size:12px;font-weight:400">${posts.length} post${posts.length === 1 ? '' : 's'}</div>
           </div>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
         </div>
       </div>
       <div class="profile-hero">
@@ -999,6 +1154,9 @@ const views = {
         <div class="header-left">
           <button class="back-btn" data-back>←</button>
           <span>Post</span>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
         </div>
       </div>
       <div class="thread-ancestors">
@@ -1092,12 +1250,13 @@ function renderWidgets() {
   }
 
   // Theme toggle button
-  const themeBtn = document.getElementById('btn-theme-toggle')
-  if (themeBtn) themeBtn.textContent = `Theme: ${currentTheme === 'dark' ? 'Dark' : 'Light'}`
+  updateThemeElements()
 }
 
 function render() {
   if (!state) return
+
+  updateThemeElements()
 
   // Nav item active state
   document.querySelectorAll('.sidebar a').forEach((a) => {
@@ -1521,7 +1680,7 @@ document.addEventListener('click', async (e) => {
   }
 
   // Theme toggle
-  if (e.target.closest('#btn-theme-toggle')) {
+  if (e.target.closest('#btn-theme-toggle') || e.target.closest('.theme-toggle-btn')) {
     toggleTheme()
     return
   }
@@ -1652,55 +1811,104 @@ document.addEventListener('click', async (e) => {
     return
   }
 
-  // Post Menu dropdown (3 dots)
+  // Post Menu dropdown (3 dots) - opens native bottom sheet
   const menuBtn = e.target.closest('[data-post-menu]')
   if (menuBtn) {
     const id = menuBtn.dataset.postMenu
-    const post = (state?.posts || []).find((p) => p.id === id)
-    if (!post) return
-    const isMine = post.author === state?.me
-    const actions = [
-      `1. Copy post text`,
-      `2. Copy author key (@${short(post.author)})`,
-      isMine ? `3. Delete post` : `3. ${following().has(post.author) ? 'Unfollow' : 'Follow'} author`,
-      !isMine ? `4. ${isBlocked(post.author) ? 'Unblock' : 'Block'} @${short(post.author)}` : '',
-      !isMine ? `5. 🚩 Report post (Spam / Scam / Abuse)` : ''
-    ]
-      .filter(Boolean)
-      .join('\n')
+    openPostOpts(id)
+    return
+  }
 
-    const choice = prompt(`Post options for ${short(id)}:\n${actions}\n\nEnter number:`, '1')
-    if (choice === '1') {
-      await navigator.clipboard.writeText(post.text)
-      toast('Post text copied!')
-    } else if (choice === '2') {
-      await navigator.clipboard.writeText(post.author)
-      toast('Author key copied!')
-    } else if (choice === '3') {
-      if (isMine) {
-        if (confirm('Delete this post?')) {
-          send({ cmd: 'delete_post', id })
-          toast('Post deleted.')
-        }
-      } else {
-        const isF = following().has(post.author)
-        send({ cmd: isF ? 'unfollow' : 'follow', key: post.author })
-        toast(isF ? 'Unfollowed' : 'Following!')
+  // Sheet action item clicked
+  const sheetActionBtn = e.target.closest('[data-sheet-action]')
+  if (sheetActionBtn) {
+    const act = sheetActionBtn.dataset.sheetAction
+    const post = (state?.posts || []).find((p) => p.id === activePostOptsId)
+    if (!post) {
+      postOptsDialog?.close()
+      return
+    }
+
+    if (act === 'copy-text') {
+      try {
+        await navigator.clipboard.writeText(post.text)
+        toast('Post text copied!')
+      } catch {
+        prompt('Post text', post.text)
       }
-    } else if (choice === '4' && !isMine) {
-      const blocked = isBlocked(post.author)
-      send({ cmd: blocked ? 'unblock' : 'block', key: post.author })
-      toast(blocked ? 'Unblocked' : 'Blocked author!')
-    } else if (choice === '5' && !isMine) {
-      const reasonChoice = prompt(
-        `Select report reason for this post:\n1. Spam or Bot Activity\n2. Scam or Fraud\n3. Abuse or Harassment\n4. Misinformation\n\nEnter number (1-4):`,
-        '1'
-      )
-      const reasonsMap = { '1': 'spam', '2': 'scam', '3': 'abuse', '4': 'misinfo' }
-      const reason = reasonsMap[reasonChoice] || 'spam'
-      toast('⛏️ Verifying Proof of Work for report…')
+      postOptsDialog?.close()
+    } else if (act === 'copy-key') {
+      try {
+        await navigator.clipboard.writeText(post.author)
+        toast('Author key copied!')
+      } catch {
+        prompt('Author key', post.author)
+      }
+      postOptsDialog?.close()
+    } else if (act === 'share') {
+      try {
+        await navigator.clipboard.writeText(post.id)
+        toast('Post ID copied!')
+      } catch {
+        prompt('Post ID', post.id)
+      }
+      postOptsDialog?.close()
+    } else if (act === 'toggle-follow') {
+      const isF = following().has(post.author)
+      send({ cmd: isF ? 'unfollow' : 'follow', key: post.author })
+      toast(isF ? `Unfollowed @${short(post.author)}` : `Following @${short(post.author)}!`)
+      postOptsDialog?.close()
+    } else if (act === 'toggle-mute') {
+      const isM = isMuted(post.author)
+      send({ cmd: isM ? 'unmute' : 'mute', key: post.author })
+      toast(isM ? `Unmuted @${short(post.author)}` : `Muted @${short(post.author)}`)
+      postOptsDialog?.close()
+    } else if (act === 'toggle-block') {
+      const isB = isBlocked(post.author)
+      send({ cmd: isB ? 'unblock' : 'block', key: post.author })
+      toast(isB ? `Unblocked @${short(post.author)}` : `Blocked @${short(post.author)}`)
+      postOptsDialog?.close()
+    } else if (act === 'delete') {
+      postOptsDialog?.close()
+      showConfirm('Delete Post', 'Are you sure you want to delete this post from your feed?', () => {
+        send({ cmd: 'delete_post', id: activePostOptsId })
+        toast('Post deleted.')
+      })
+    } else if (act === 'open-report') {
+      postOptsDialog?.close()
+      reportDialog?.showModal()
+    }
+    return
+  }
+
+  // Report Modal: Back button
+  if (e.target.closest('#btn-report-back')) {
+    reportDialog?.close()
+    if (activePostOptsId) openPostOpts(activePostOptsId)
+    return
+  }
+
+  // Report Modal: Submit
+  if (e.target.closest('#btn-submit-report')) {
+    const checked = document.querySelector('input[name="report-reason"]:checked')
+    const reason = checked ? checked.value : 'spam'
+    const id = activePostOptsId
+    reportDialog?.close()
+    if (id) {
+      toast('⛏️ Mining Proof of Work for report…')
       send({ cmd: 'report', id, reason })
       toast('🚩 Post reported. Community moderation updated.')
+    }
+    return
+  }
+
+  // Confirm Modal: Confirm Action
+  if (e.target.closest('#btn-confirm-action')) {
+    confirmDialog?.close()
+    if (typeof pendingConfirmCallback === 'function') {
+      const cb = pendingConfirmCallback
+      pendingConfirmCallback = null
+      cb()
     }
     return
   }
