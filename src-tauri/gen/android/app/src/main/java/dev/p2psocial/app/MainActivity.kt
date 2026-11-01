@@ -27,7 +27,9 @@ class MainActivity : TauriActivity() {
     Log.i("p2p-social", "Registering AndroidUpdater JavaScript interface...")
     val updateManager = AndroidUpdateManager(this, webView)
     webView.addJavascriptInterface(updateManager, "AndroidUpdater")
-    setupOtaInterceptor(webView)
+    webView.post {
+      setupOtaInterceptor(webView)
+    }
   }
 
   private fun setupOtaInterceptor(webView: WebView) {

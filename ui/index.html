@@ -293,7 +293,7 @@
           </div>
 
           <div class="update-actions" id="update-actions-box" style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="primary" id="btn-start-ota" style="display:none">⚡ Apply Silent Update (Instant)</button>
+            <button class="primary" id="btn-start-ota" style="display:none">Apply Silent Update</button>
             <button class="outline" id="btn-start-update">Download Full APK</button>
           </div>
         </div>
@@ -307,12 +307,11 @@
     <!-- Silent OTA Update Toast Banner -->
     <div id="ota-banner" class="ota-banner" style="display:none">
       <div class="ota-banner-content">
-        <span class="ota-banner-icon">✨</span>
         <span class="ota-banner-text" id="ota-banner-text">Update applied silently!</span>
       </div>
       <div class="ota-banner-actions">
         <button type="button" class="btn-sm primary" id="btn-ota-reload">Reload Now</button>
-        <button type="button" class="btn-sm outline" id="btn-ota-dismiss">✕</button>
+        <button type="button" class="btn-sm outline" id="btn-ota-dismiss">&times;</button>
       </div>
     </div>
 
@@ -343,28 +342,28 @@
           <label class="report-reason-item">
             <input type="radio" name="report-reason" value="spam" checked />
             <div class="report-reason-text">
-              <span class="report-reason-title">🤖 Spam or Bot Activity</span>
+              <span class="report-reason-title">Spam or Bot Activity</span>
               <span class="report-reason-desc">Automated bulk posting, fake engagement, tag stuffing</span>
             </div>
           </label>
           <label class="report-reason-item">
             <input type="radio" name="report-reason" value="scam" />
             <div class="report-reason-text">
-              <span class="report-reason-title">💸 Scam, Phishing, or Fraud</span>
+              <span class="report-reason-title">Scam, Phishing, or Fraud</span>
               <span class="report-reason-desc">Malicious links, crypto airdrop scams, financial fraud</span>
             </div>
           </label>
           <label class="report-reason-item">
             <input type="radio" name="report-reason" value="abuse" />
             <div class="report-reason-text">
-              <span class="report-reason-title">⚠️ Harassment or Abuse</span>
+              <span class="report-reason-title">Harassment or Abuse</span>
               <span class="report-reason-desc">Threats, hate speech, bullying, or targeted abuse</span>
             </div>
           </label>
           <label class="report-reason-item">
             <input type="radio" name="report-reason" value="misinfo" />
             <div class="report-reason-text">
-              <span class="report-reason-title">📢 Misinformation / Impersonation</span>
+              <span class="report-reason-title">Misinformation or Impersonation</span>
               <span class="report-reason-desc">Fake identity, impersonating another peer, harmful hoaxes</span>
             </div>
           </label>

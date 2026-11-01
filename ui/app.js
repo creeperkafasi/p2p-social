@@ -36,14 +36,29 @@ let pendingConfirmCallback = null
 ;[postOptsDialog, reportDialog, confirmDialog].forEach((dlg) => {
   if (!dlg) return
   dlg.addEventListener('click', (e) => {
-    const rect = dlg.getBoundingClientRect()
-    const isInDialog =
-      rect.top <= e.clientY && e.clientY <= rect.top + rect.height && rect.left <= e.clientX && e.clientX <= rect.left + rect.width
-    if (!isInDialog) {
+    if (e.target === dlg) {
       dlg.close()
     }
   })
 })
+
+// UI Icon Helpers (SVG only, zero emojis)
+const ICONS = {
+  sun: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`,
+  moon: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`,
+  refresh: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`,
+  copy: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+  key: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M12 11l8-8m-4 0l4 4m-2-2l2 2"/></svg>`,
+  share: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>`,
+  trash: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+  userPlus: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>`,
+  userMinus: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/></svg>`,
+  volumeX: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`,
+  volume2: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`,
+  slash: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,
+  flag: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>`,
+  message: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`
+}
 
 // --- Theme Management ---
 let currentTheme = localStorage.getItem('p2p_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') || 'dark'
@@ -51,7 +66,7 @@ document.documentElement.setAttribute('data-theme', currentTheme)
 
 function updateThemeElements() {
   document.querySelectorAll('.theme-toggle-btn').forEach((btn) => {
-    btn.innerHTML = currentTheme === 'dark' ? '☀️' : '🌙'
+    btn.innerHTML = currentTheme === 'dark' ? ICONS.sun : ICONS.moon
     btn.setAttribute('title', currentTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode')
   })
   const sidebarBtn = document.getElementById('btn-theme-toggle')
@@ -282,7 +297,7 @@ function pollHtml(p) {
       <div class="poll-result-bar">
         <div class="poll-result-fill" style="width: ${pct}%"></div>
         <div class="poll-result-text">
-          <span>${esc(opt)} ${isMyPick ? '✓' : ''}</span>
+          <span>${esc(opt)}${isMyPick ? ' <b>(voted)</b>' : ''}</span>
           <span><b>${pct}%</b> (${count})</span>
         </div>
       </div>`
@@ -479,7 +494,7 @@ function postHtml(p, opts = {}) {
       <div class="flagged-post-card" data-flagged-id="${p.id}">
         <div class="flagged-banner">
           <div class="flagged-text">
-            <strong>⚠️ Content Flagged by Community</strong>
+            <strong>Flagged by Community</strong>
             <div class="muted" style="font-size:12px">Hidden due to peer reports (${esc(reasons)}).</div>
           </div>
           <button type="button" class="btn-sm outline" data-reveal-flagged="${p.id}">Reveal</button>
@@ -493,15 +508,12 @@ function postHtml(p, opts = {}) {
   let trustBadge = ''
   if (rep) {
     let trustClass = ''
-    let trustIcon = '🛡️'
     if (rep.trust < 60) {
       trustClass = 'danger'
-      trustIcon = '⚠️'
     } else if (rep.trust < 85) {
       trustClass = 'warn'
-      trustIcon = '⚡'
     }
-    trustBadge = `<span class="author-trust-pill ${trustClass}" title="Decentralized Trust: ${rep.trust}% (${rep.score} pts)">${trustIcon} ${rep.trust}%</span>`
+    trustBadge = `<span class="author-trust-pill ${trustClass}" title="Decentralized Trust: ${rep.trust}% (${rep.score} pts)">${rep.trust}%</span>`
   }
 
   const tokensRow = (Array.isArray(p.tokens) && p.tokens.length)
@@ -591,15 +603,6 @@ function composeHtml(opts = {}) {
     </div>`
     : ''
 
-  const emojiTrayHtml = draft.showEmoji
-    ? `
-    <div class="emoji-tray" data-compose-id="${replyTo}">
-      ${['🔥', '🚀', '❤️', '😂', '👍', '🎉', '💯', '💡', '⚡', '🫡', '👏', '✨', '🌐', '💻', '🤝', '🔒']
-        .map((emoji) => `<button type="button" class="emoji-btn" data-insert-emoji="${emoji}" data-compose-id="${replyTo}">${emoji}</button>`)
-        .join('')}
-    </div>`
-    : ''
-
   const quotedTarget = quoteOf ? state?.posts?.find((p) => p.id === quoteOf) : null
 
   return `
@@ -610,7 +613,6 @@ function composeHtml(opts = {}) {
         ${previews ? `<div class="compose-previews">${previews}</div>` : ''}
         ${pollBuilderHtml}
         ${quotedTarget ? quoteEmbedHtml(quotedTarget.id) : ''}
-        ${emojiTrayHtml}
         <div class="compose-toolbar">
           <div class="compose-tools">
             <label class="tool-icon-btn" title="Add Image">
@@ -621,13 +623,10 @@ function composeHtml(opts = {}) {
               !replyTo
                 ? `
             <button type="button" class="tool-icon-btn" data-toggle-poll="${replyTo}" title="Create Poll">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="6" x2="6" y2="14"></line></svg>
             </button>`
                 : ''
             }
-            <button type="button" class="tool-icon-btn" data-toggle-emoji="${replyTo}" title="Add Emoji">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
-            </button>
           </div>
           <div class="compose-submit-wrap">
             <span class="char-count"></span>
@@ -665,7 +664,7 @@ function openPostOpts(postId) {
       `
       <button class="sheet-action-item" data-sheet-action="copy-text">
         <div class="sheet-action-left">
-          <span class="sheet-action-icon">📋</span>
+          <span class="sheet-action-icon">${ICONS.copy}</span>
           <span>Copy Post Text</span>
         </div>
         <span class="sheet-hint">Markdown text</span>
@@ -673,7 +672,7 @@ function openPostOpts(postId) {
       `
       <button class="sheet-action-item" data-sheet-action="copy-key">
         <div class="sheet-action-left">
-          <span class="sheet-action-icon">🔑</span>
+          <span class="sheet-action-icon">${ICONS.key}</span>
           <span>Copy Author Key</span>
         </div>
         <span class="sheet-hint monospace">@${short(post.author)}</span>
@@ -681,7 +680,7 @@ function openPostOpts(postId) {
       `
       <button class="sheet-action-item" data-sheet-action="share">
         <div class="sheet-action-left">
-          <span class="sheet-action-icon">🔗</span>
+          <span class="sheet-action-icon">${ICONS.share}</span>
           <span>Share Post</span>
         </div>
         <span class="sheet-hint">Copy Post ID</span>
@@ -692,7 +691,7 @@ function openPostOpts(postId) {
       items.push(`
         <button class="sheet-action-item danger" data-sheet-action="delete">
           <div class="sheet-action-left">
-            <span class="sheet-action-icon">🗑️</span>
+            <span class="sheet-action-icon">${ICONS.trash}</span>
             <span>Delete Post</span>
           </div>
           <span class="sheet-hint danger">Delete from your feed</span>
@@ -701,7 +700,7 @@ function openPostOpts(postId) {
       items.push(`
         <button class="sheet-action-item" data-sheet-action="toggle-follow">
           <div class="sheet-action-left">
-            <span class="sheet-action-icon">${isF ? '👤' : '➕'}</span>
+            <span class="sheet-action-icon">${isF ? ICONS.userMinus : ICONS.userPlus}</span>
             <span>${isF ? 'Unfollow' : 'Follow'} @${short(post.author)}</span>
           </div>
         </button>`)
@@ -709,7 +708,7 @@ function openPostOpts(postId) {
       items.push(`
         <button class="sheet-action-item" data-sheet-action="toggle-mute">
           <div class="sheet-action-left">
-            <span class="sheet-action-icon">${isM ? '🔊' : '🔇'}</span>
+            <span class="sheet-action-icon">${isM ? ICONS.volume2 : ICONS.volumeX}</span>
             <span>${isM ? 'Unmute' : 'Mute'} @${short(post.author)}</span>
           </div>
         </button>`)
@@ -717,7 +716,7 @@ function openPostOpts(postId) {
       items.push(`
         <button class="sheet-action-item danger" data-sheet-action="toggle-block">
           <div class="sheet-action-left">
-            <span class="sheet-action-icon">🚫</span>
+            <span class="sheet-action-icon">${ICONS.slash}</span>
             <span>${isB ? 'Unblock' : 'Block'} @${short(post.author)}</span>
           </div>
         </button>`)
@@ -725,7 +724,7 @@ function openPostOpts(postId) {
       items.push(`
         <button class="sheet-action-item danger" data-sheet-action="open-report">
           <div class="sheet-action-left">
-            <span class="sheet-action-icon">🚩</span>
+            <span class="sheet-action-icon">${ICONS.flag}</span>
             <span>Report Post</span>
           </div>
           <span class="sheet-badge">PoW Moderation</span>
@@ -764,7 +763,7 @@ const views = {
     } else if (activeSub === 'latest') {
       posts = [...posts].sort((a, b) => b.ts - a.ts)
     } else {
-      // ⚡ For You: Algorithmic ranking based on sovereign taste vector & trust
+      // For You: Algorithmic ranking based on sovereign taste vector & trust
       const taste = getTasteVector()
       posts = [...posts].sort((a, b) => computeFypScore(b, taste) - computeFypScore(a, taste))
     }
@@ -773,15 +772,15 @@ const views = {
       <div class="header">
         <span>Home</span>
         <div class="header-actions">
-          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
-          <button class="icon-btn-ghost" id="btn-open-updates" title="In-App Updates">🔄</button>
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? ICONS.sun : ICONS.moon}</button>
+          <button class="icon-btn-ghost" id="btn-open-updates" title="In-App Updates">${ICONS.refresh}</button>
         </div>
       </div>
       <div class="tabs-bar">
-        <button class="tab-btn${activeSub === 'forYou' ? ' active' : ''}" data-subtab="forYou">⚡ For You</button>
-        <button class="tab-btn${activeSub === 'trending' ? ' active' : ''}" data-subtab="trending">🔥 Trending</button>
-        <button class="tab-btn${activeSub === 'latest' ? ' active' : ''}" data-subtab="latest">⏱️ Latest</button>
-        <button class="tab-btn${activeSub === 'following' ? ' active' : ''}" data-subtab="following">👥 Following</button>
+        <button class="tab-btn${activeSub === 'forYou' ? ' active' : ''}" data-subtab="forYou">For You</button>
+        <button class="tab-btn${activeSub === 'trending' ? ' active' : ''}" data-subtab="trending">Trending</button>
+        <button class="tab-btn${activeSub === 'latest' ? ' active' : ''}" data-subtab="latest">Latest</button>
+        <button class="tab-btn${activeSub === 'following' ? ' active' : ''}" data-subtab="following">Following</button>
       </div>
       ${composeHtml()}
       <div class="feed">
@@ -818,7 +817,7 @@ const views = {
       <div class="header">
         <span>Explore</span>
         <div class="header-actions">
-          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? ICONS.sun : ICONS.moon}</button>
         </div>
       </div>
       <div class="tabs-bar">
@@ -920,7 +919,7 @@ const views = {
       <div class="header">
         <span>Notifications</span>
         <div class="header-actions">
-          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? ICONS.sun : ICONS.moon}</button>
         </div>
       </div>
       <div class="tabs-bar">
@@ -971,7 +970,7 @@ const views = {
       <div class="header">
         <span>Direct Messages</span>
         <div class="header-actions">
-          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? ICONS.sun : ICONS.moon}</button>
         </div>
       </div>
       <div class="dms-container">
@@ -1016,7 +1015,7 @@ const views = {
       <div class="header">
         <span>Bookmarks</span>
         <div class="header-actions">
-          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? ICONS.sun : ICONS.moon}</button>
         </div>
       </div>
       <div class="feed">
@@ -1051,10 +1050,10 @@ const views = {
 
     const actionButtons = isMine
       ? `<button class="outline" id="edit-profile">Edit profile</button>
-         <button class="outline" id="btn-open-updates" title="In-App Updates">🔄 Updates</button>`
+         <button class="outline" id="btn-open-updates" title="In-App Updates">Updates</button>`
       : `
         <button class="${isFollowed ? 'outline' : 'primary'}" data-follow="${key}">${isFollowed ? 'Unfollow' : 'Follow'}</button>
-        <button class="outline" data-open-dm="${key}" title="Direct Message">💬</button>
+        <button class="outline" data-open-dm="${key}" title="Direct Message">DM</button>
         <button class="outline" data-show-qr="${key}" title="Show QR Code">QR</button>`
 
     return `
@@ -1067,7 +1066,7 @@ const views = {
           </div>
         </div>
         <div class="header-actions">
-          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? ICONS.sun : ICONS.moon}</button>
         </div>
       </div>
       <div class="profile-hero">
@@ -1084,13 +1083,13 @@ const views = {
           </div>
           ${prof.bio ? `<div class="profile-bio">${formatText(prof.bio)}</div>` : ''}
           <div class="profile-meta-row">
-            ${prof.location ? `<div class="profile-meta-item">📍 ${esc(prof.location)}</div>` : ''}
+            ${prof.location ? `<div class="profile-meta-item">${esc(prof.location)}</div>` : ''}
             ${
               prof.website
-                ? `<div class="profile-meta-item">🔗 <a href="${esc(prof.website)}" target="_blank" rel="noopener">${esc(prof.website)}</a></div>`
+                ? `<div class="profile-meta-item"><a href="${esc(prof.website)}" target="_blank" rel="noopener">${esc(prof.website)}</a></div>`
                 : ''
             }
-            <div class="profile-meta-item">⚡ ${prof.length || 0} Hypercore blocks</div>
+            <div class="profile-meta-item">${prof.length || 0} blocks</div>
           </div>
           <div class="profile-stats-row">
             <span><b>${prof.following?.length || 0}</b> Following</span>
@@ -1102,14 +1101,14 @@ const views = {
           <div class="reputation-badge-box">
             <div class="reputation-badge-header">
               <div class="rep-chip">
-                <span>${prof.reputation.trust >= 90 ? '🛡️' : (prof.reputation.trust < 60 ? '⚠️' : '⚡')} ${prof.reputation.trust}% Sovereign Trust</span>
+                <span>${prof.reputation.trust}% Sovereign Trust</span>
                 <span class="muted" style="font-weight:400">(${prof.reputation.score} pts)</span>
               </div>
             </div>
             <div class="rep-stats muted">
-              <span>❤️ ${prof.reputation.likes} likes</span> · 
-              <span>👁️ ${prof.reputation.cleanViews} clean views</span>
-              ${prof.reputation.reports > 0 ? ` · <span class="rep-reports">🚩 ${prof.reputation.reports} reports</span>` : ''}
+              <span>${prof.reputation.likes} likes</span> · 
+              <span>${prof.reputation.cleanViews} clean views</span>
+              ${prof.reputation.reports > 0 ? ` · <span class="rep-reports">${prof.reputation.reports} reports</span>` : ''}
             </div>
           </div>`
               : ''
@@ -1156,7 +1155,7 @@ const views = {
           <span>Post</span>
         </div>
         <div class="header-actions">
-          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? '☀️' : '🌙'}</button>
+          <button class="icon-btn-ghost theme-toggle-btn" title="Toggle Theme">${currentTheme === 'dark' ? ICONS.sun : ICONS.moon}</button>
         </div>
       </div>
       <div class="thread-ancestors">
@@ -1525,6 +1524,16 @@ document.addEventListener('click', async (e) => {
     return
   }
 
+  // Post Menu dropdown (3 dots) - opens native bottom sheet
+  const menuBtn = e.target.closest('[data-post-menu]')
+  if (menuBtn) {
+    e.preventDefault()
+    e.stopPropagation()
+    const id = menuBtn.dataset.postMenu
+    openPostOpts(id)
+    return
+  }
+
   // Profile click
   const profEl = e.target.closest('[data-profile]')
   if (profEl && !e.target.closest('button, input, textarea, a')) {
@@ -1811,14 +1820,6 @@ document.addEventListener('click', async (e) => {
     return
   }
 
-  // Post Menu dropdown (3 dots) - opens native bottom sheet
-  const menuBtn = e.target.closest('[data-post-menu]')
-  if (menuBtn) {
-    const id = menuBtn.dataset.postMenu
-    openPostOpts(id)
-    return
-  }
-
   // Sheet action item clicked
   const sheetActionBtn = e.target.closest('[data-sheet-action]')
   if (sheetActionBtn) {
@@ -1870,13 +1871,15 @@ document.addEventListener('click', async (e) => {
       postOptsDialog?.close()
     } else if (act === 'delete') {
       postOptsDialog?.close()
-      showConfirm('Delete Post', 'Are you sure you want to delete this post from your feed?', () => {
-        send({ cmd: 'delete_post', id: activePostOptsId })
-        toast('Post deleted.')
-      })
+      setTimeout(() => {
+        showConfirm('Delete Post', 'Are you sure you want to delete this post from your feed?', () => {
+          send({ cmd: 'delete_post', id: activePostOptsId })
+          toast('Post deleted.')
+        })
+      }, 50)
     } else if (act === 'open-report') {
       postOptsDialog?.close()
-      reportDialog?.showModal()
+      setTimeout(() => reportDialog?.showModal(), 50)
     }
     return
   }
@@ -1884,7 +1887,7 @@ document.addEventListener('click', async (e) => {
   // Report Modal: Back button
   if (e.target.closest('#btn-report-back')) {
     reportDialog?.close()
-    if (activePostOptsId) openPostOpts(activePostOptsId)
+    if (activePostOptsId) setTimeout(() => openPostOpts(activePostOptsId), 50)
     return
   }
 
@@ -1895,9 +1898,9 @@ document.addEventListener('click', async (e) => {
     const id = activePostOptsId
     reportDialog?.close()
     if (id) {
-      toast('⛏️ Mining Proof of Work for report…')
+      toast('Mining Proof of Work for report…')
       send({ cmd: 'report', id, reason })
-      toast('🚩 Post reported. Community moderation updated.')
+      toast('Post reported. Community moderation updated.')
     }
     return
   }
@@ -2248,7 +2251,7 @@ async function checkUpdatesAction(interactive = true) {
         if (updateInfo.hasOtaUpdate && updateInfo.otaUrl) {
           const kb = (updateInfo.otaSize / 1024).toFixed(0)
           otaBtn.style.display = 'inline-flex'
-          otaBtn.textContent = `⚡ Apply Silent Update (${kb > 0 ? kb + ' KB' : 'Instant'})`
+          otaBtn.textContent = `Apply Silent Update (${kb > 0 ? kb + ' KB' : 'Instant'})`
           otaBtn.disabled = false
         } else {
           otaBtn.style.display = 'none'
@@ -2347,17 +2350,17 @@ function startOtaDownloadAction() {
 }
 
 window.__onOtaApplied = (version) => {
-  toast(`✨ Update v${version} applied silently!`)
+  toast(`Update v${version} applied silently!`)
   const banner = document.getElementById('ota-banner')
   const text = document.getElementById('ota-banner-text')
   if (banner && text) {
-    text.textContent = `✨ Updated to v${version} silently!`
+    text.textContent = `Updated to v${version} silently!`
     banner.style.display = 'flex'
   }
   const otaBtn = document.getElementById('btn-start-ota')
   if (otaBtn) {
     otaBtn.disabled = true
-    otaBtn.textContent = '✓ Applied!'
+    otaBtn.textContent = 'Applied'
   }
   const curVer = document.getElementById('update-current-version')
   if (curVer) curVer.textContent = `v${version} (OTA)`
@@ -2368,7 +2371,7 @@ window.__onOtaError = (err) => {
   const otaBtn = document.getElementById('btn-start-ota')
   if (otaBtn) {
     otaBtn.disabled = false
-    otaBtn.textContent = '⚡ Retry Silent Update'
+    otaBtn.textContent = 'Retry Silent Update'
   }
 }
 
