@@ -1,0 +1,27 @@
+{
+  "name": "p2p-social",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Twitter-like P2P social MVP: Tauri shell + Bare backend on the Holepunch stack",
+  "scripts": {
+    "dev": "cd src-tauri && cargo run",
+    "build": "tauri build",
+    "backend": "bare backend/index.js",
+    "test": "node test/e2e.js"
+  },
+  "dependencies": {
+    "b4a": "^1.9.0",
+    "bare-fs": "^4.8.4",
+    "bare-path": "^3.1.2",
+    "bare-pipe": "^4.4.0",
+    "compact-encoding": "^3.5.2",
+    "corestore": "^7.16.1",
+    "hypercore-crypto": "^3.7.0",
+    "hyperswarm": "^4.17.2",
+    "protomux": "^3.13.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
+    "bare": "^1.36.2"
+  }
+}

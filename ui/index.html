@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>p2p-social</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <nav class="sidebar">
+        <div class="logo">p2p<span>social</span></div>
+        <a href="#home" data-view="home">Home</a>
+        <a href="#explore" data-view="explore">Explore</a>
+        <a href="#profile" data-view="profile">Profile</a>
+        <div class="net">
+          <div><span class="dot" id="net-dot"></span><span id="net-peers">connecting…</span></div>
+          <button class="link" id="copy-key" title="Copy your feed key">Copy my key</button>
+        </div>
+      </nav>
+      <main id="main"></main>
+    </div>
+
+    <dialog id="setup">
+      <form method="dialog" id="setup-form">
+        <h2>Pick a display name</h2>
+        <p class="muted">Your account is a keypair on this device. No signup, no server.</p>
+        <input name="name" placeholder="Display name" maxlength="50" required />
+        <textarea name="bio" placeholder="Bio (optional)" maxlength="160" rows="2"></textarea>
+        <button class="primary">Save</button>
+      </form>
+    </dialog>
+
+    <div id="toast"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
