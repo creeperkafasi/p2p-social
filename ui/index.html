@@ -292,8 +292,9 @@
             <div class="update-progress-text" id="update-progress-text">Downloading… 0%</div>
           </div>
 
-          <div class="update-actions" id="update-actions-box">
-            <button class="primary" id="btn-start-update">Download &amp; Install</button>
+          <div class="update-actions" id="update-actions-box" style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="primary" id="btn-start-ota" style="display:none">⚡ Apply Silent Update (Instant)</button>
+            <button class="outline" id="btn-start-update">Download Full APK</button>
           </div>
         </div>
 
@@ -302,6 +303,18 @@
         </div>
       </div>
     </dialog>
+
+    <!-- Silent OTA Update Toast Banner -->
+    <div id="ota-banner" class="ota-banner" style="display:none">
+      <div class="ota-banner-content">
+        <span class="ota-banner-icon">✨</span>
+        <span class="ota-banner-text" id="ota-banner-text">Update applied silently!</span>
+      </div>
+      <div class="ota-banner-actions">
+        <button type="button" class="btn-sm primary" id="btn-ota-reload">Reload Now</button>
+        <button type="button" class="btn-sm outline" id="btn-ota-dismiss">✕</button>
+      </div>
+    </div>
 
     <!-- Lightbox Modal for Images -->
     <dialog id="lightbox">

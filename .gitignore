@@ -1,6 +1,8 @@
 node_modules/
 src-tauri/target/
 storage/
+dist/
+ui/manifest.json
 
 # Android build caches, build outputs & heavy assets (recreated by scripts/build-android.sh)
 src-tauri/gen/android/.gradle/

@@ -1621,3 +1621,46 @@ dialog::backdrop {
     max-height: 200px;
   }
 }
+
+/* --- Silent OTA Toast Banner --- */
+.ota-banner {
+  position: fixed;
+  bottom: calc(70px + env(safe-area-inset-bottom, 12px));
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--card);
+  border: 1px solid var(--accent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  border-radius: 14px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  z-index: 9999;
+  max-width: 92vw;
+  width: max-content;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: slideOtaUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ota-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text);
+}
+.ota-banner-icon {
+  font-size: 16px;
+}
+.ota-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+@keyframes slideOtaUp {
+  from { opacity: 0; transform: translate(-50%, 20px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}

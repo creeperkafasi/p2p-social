@@ -1312,6 +1312,23 @@ document.addEventListener('click', async (e) => {
     startDownloadAction()
     return
   }
+  if (e.target.closest('#btn-start-ota')) {
+    startOtaDownloadAction()
+    return
+  }
+  if (e.target.closest('#btn-ota-reload')) {
+    if (window.AndroidUpdater?.reloadWebView) {
+      window.AndroidUpdater.reloadWebView()
+    } else {
+      location.reload()
+    }
+    return
+  }
+  if (e.target.closest('#btn-ota-dismiss')) {
+    const banner = document.getElementById('ota-banner')
+    if (banner) banner.style.display = 'none'
+    return
+  }
 
   // Close modals
   if (e.target.closest('[data-close-modal]')) {
@@ -1633,6 +1650,14 @@ const DEFAULT_REPO = 'creeperkafasi/p2p-social'
 let availableUpdate = null
 
 function getAppVersion() {
+  if (window.AndroidUpdater?.getOtaVersion) {
+    try {
+      const ota = window.AndroidUpdater.getOtaVersion()
+      const nativeVer = window.AndroidUpdater.getAppVersion()
+      if (ota && ota !== nativeVer) return `${ota} (OTA)`
+      return ota || nativeVer
+    } catch {}
+  }
   if (window.AndroidUpdater?.getAppVersion) {
     try {
       return window.AndroidUpdater.getAppVersion()
@@ -1752,14 +1777,27 @@ async function checkUpdatesAction(interactive = true) {
       if (idleMsg) idleMsg.style.display = 'none'
       if (cardTitle) cardTitle.textContent = `${updateInfo.releaseName || 'Release'} (${updateInfo.tagName})`
       if (cardNotes) cardNotes.textContent = updateInfo.releaseNotes || 'No release notes provided.'
+      
+      const otaBtn = document.getElementById('btn-start-ota')
+      if (otaBtn) {
+        if (updateInfo.hasOtaUpdate && updateInfo.otaUrl) {
+          const kb = (updateInfo.otaSize / 1024).toFixed(0)
+          otaBtn.style.display = 'inline-flex'
+          otaBtn.textContent = `⚡ Apply Silent Update (${kb > 0 ? kb + ' KB' : 'Instant'})`
+          otaBtn.disabled = false
+        } else {
+          otaBtn.style.display = 'none'
+        }
+      }
+
       if (fileSizeEl) {
         fileSizeEl.textContent = updateInfo.apkSize > 0
           ? `${(updateInfo.apkSize / (1024 * 1024)).toFixed(1)} MB`
           : ''
       }
       if (startBtn) {
-        startBtn.disabled = false
-        startBtn.textContent = 'Download & Install'
+        startBtn.disabled = !updateInfo.apkUrl
+        startBtn.textContent = 'Download Full APK'
       }
       if (progressBox) progressBox.style.display = 'none'
       if (interactive) {
@@ -1771,7 +1809,7 @@ async function checkUpdatesAction(interactive = true) {
       if (card) card.style.display = 'none'
       if (idleMsg) {
         idleMsg.style.display = 'block'
-        idleMsg.textContent = `You are on the latest version (v${updateInfo.currentVersion}).`
+        idleMsg.textContent = `You are on the latest version (v${updateInfo.currentOtaVersion || updateInfo.currentVersion}).`
       }
       if (interactive) toast('App is up to date!')
     }
@@ -1826,6 +1864,67 @@ function startDownloadAction() {
     }
   }
 }
+
+function startOtaDownloadAction() {
+  if (!availableUpdate?.otaUrl) {
+    toast('No silent update bundle available.')
+    return
+  }
+  const btn = document.getElementById('btn-start-ota')
+  if (btn) {
+    btn.disabled = true
+    btn.textContent = 'Applying update…'
+  }
+  toast('Downloading silent update…')
+  if (window.AndroidUpdater?.downloadAndApplyOta) {
+    window.AndroidUpdater.downloadAndApplyOta(availableUpdate.otaUrl, availableUpdate.latestVersion)
+  }
+}
+
+window.__onOtaApplied = (version) => {
+  toast(`✨ Update v${version} applied silently!`)
+  const banner = document.getElementById('ota-banner')
+  const text = document.getElementById('ota-banner-text')
+  if (banner && text) {
+    text.textContent = `✨ Updated to v${version} silently!`
+    banner.style.display = 'flex'
+  }
+  const otaBtn = document.getElementById('btn-start-ota')
+  if (otaBtn) {
+    otaBtn.disabled = true
+    otaBtn.textContent = '✓ Applied!'
+  }
+  const curVer = document.getElementById('update-current-version')
+  if (curVer) curVer.textContent = `v${version} (OTA)`
+}
+
+window.__onOtaError = (err) => {
+  toast('Silent update error: ' + err)
+  const otaBtn = document.getElementById('btn-start-ota')
+  if (otaBtn) {
+    otaBtn.disabled = false
+    otaBtn.textContent = '⚡ Retry Silent Update'
+  }
+}
+
+// Background silent OTA update check on boot (Instagram-style)
+async function checkSilentOta() {
+  if (!window.AndroidUpdater?.checkForUpdates) return
+  try {
+    const repo = localStorage.getItem('p2p_github_repo') || DEFAULT_REPO
+    const raw = window.AndroidUpdater.checkForUpdates(repo)
+    const updateInfo = JSON.parse(raw)
+    if (updateInfo.success && updateInfo.hasOtaUpdate && updateInfo.otaUrl) {
+      console.log('[OTA] Discovered silent update:', updateInfo.latestVersion)
+      window.AndroidUpdater.downloadAndApplyOta(updateInfo.otaUrl, updateInfo.latestVersion)
+    }
+  } catch (err) {
+    console.warn('[OTA] Silent check failed:', err)
+  }
+}
+
+// Trigger silent check 4 seconds after app launches
+setTimeout(checkSilentOta, 4000)
 
 // Relative timestamps update every 20 seconds
 setInterval(() => {

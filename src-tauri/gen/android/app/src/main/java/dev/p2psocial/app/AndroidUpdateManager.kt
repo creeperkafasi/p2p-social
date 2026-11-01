@@ -12,9 +12,9 @@ import androidx.core.content.FileProvider
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.zip.ZipInputStream
 import kotlin.concurrent.thread
 
 class AndroidUpdateManager(
@@ -29,6 +29,33 @@ class AndroidUpdateManager(
 
   @JavascriptInterface
   fun getAppVersion(): String = BuildConfig.VERSION_NAME
+
+  @JavascriptInterface
+  fun getOtaVersion(): String {
+    val verFile = File(activity.filesDir, ".ota_version")
+    return if (verFile.exists()) {
+      verFile.readText().trim()
+    } else {
+      getAppVersion()
+    }
+  }
+
+  @JavascriptInterface
+  fun reloadWebView() {
+    activity.runOnUiThread {
+      webView.reload()
+    }
+  }
+
+  @JavascriptInterface
+  fun rollbackOta(): Boolean {
+    val otaDir = File(activity.filesDir, "ui")
+    val verFile = File(activity.filesDir, ".ota_version")
+    if (otaDir.exists()) otaDir.deleteRecursively()
+    if (verFile.exists()) verFile.delete()
+    reloadWebView()
+    return true
+  }
 
   @JavascriptInterface
   fun checkForUpdates(repo: String): String {
@@ -67,44 +94,149 @@ class AndroidUpdateManager(
       var apkName: String? = null
       var apkSize: Long = 0
 
+      var otaUrl: String? = null
+      var otaName: String? = null
+      var otaSize: Long = 0
+
       if (assets != null) {
         for (i in 0 until assets.length()) {
           val asset = assets.getJSONObject(i)
           val name = asset.optString("name", "")
+          val downloadUrl = asset.optString("browser_download_url", "")
+          val size = asset.optLong("size", 0L)
+
           if (name.endsWith(".apk", ignoreCase = true)) {
-            apkUrl = asset.optString("browser_download_url", "")
-            apkName = name
-            apkSize = asset.optLong("size", 0L)
-            // Prefer arm64 or universal over generic x86
-            if (name.contains("arm64", ignoreCase = true) || name.contains("universal", ignoreCase = true)) {
-              break
+            if (apkUrl == null || name.contains("arm64", ignoreCase = true) || name.contains("universal", ignoreCase = true)) {
+              apkUrl = downloadUrl
+              apkName = name
+              apkSize = size
             }
+          } else if (name.endsWith(".zip", ignoreCase = true) && (name.contains("ota", ignoreCase = true) || name.contains("bundle", ignoreCase = true))) {
+            otaUrl = downloadUrl
+            otaName = name
+            otaSize = size
           }
         }
       }
 
       val currentVersion = BuildConfig.VERSION_NAME.removePrefix("v").trim()
+      val currentOtaVersion = getOtaVersion().removePrefix("v").trim()
       val latestVersion = tagName.removePrefix("v").trim()
-      val hasUpdate = isNewerVersion(latestVersion, currentVersion)
+
+      val hasNativeUpdate = isNewerVersion(latestVersion, currentVersion)
+      val hasOtaUpdate = otaUrl != null && isNewerVersion(latestVersion, currentOtaVersion)
 
       result.put("success", true)
       result.put("currentVersion", currentVersion)
+      result.put("currentOtaVersion", currentOtaVersion)
       result.put("latestVersion", latestVersion)
       result.put("tagName", tagName)
       result.put("releaseName", releaseName)
       result.put("releaseNotes", releaseNotes)
-      result.put("hasUpdate", hasUpdate)
+      result.put("hasUpdate", hasNativeUpdate || hasOtaUpdate)
+      result.put("hasNativeUpdate", hasNativeUpdate)
+      result.put("hasOtaUpdate", hasOtaUpdate)
       result.put("apkUrl", apkUrl ?: "")
       result.put("apkName", apkName ?: "")
       result.put("apkSize", apkSize)
+      result.put("otaUrl", otaUrl ?: "")
+      result.put("otaName", otaName ?: "")
+      result.put("otaSize", otaSize)
 
-      Log.i(tag, "Update check result: current=$currentVersion, latest=$latestVersion, hasUpdate=$hasUpdate, apk=$apkUrl")
+      Log.i(tag, "Update check result: current=$currentVersion, otaCurrent=$currentOtaVersion, latest=$latestVersion, hasOta=$hasOtaUpdate, hasNative=$hasNativeUpdate")
       return result.toString()
     } catch (e: Exception) {
       Log.e(tag, "Failed to check for updates", e)
       result.put("success", false)
       result.put("error", e.message ?: "Unknown network error")
       return result.toString()
+    }
+  }
+
+  @JavascriptInterface
+  fun downloadAndApplyOta(otaUrl: String, otaVersion: String) {
+    Log.i(tag, "Starting silent OTA download: url=$otaUrl, version=$otaVersion")
+    thread(name = "ota-downloader") {
+      try {
+        var currentUrl = otaUrl
+        var conn: HttpURLConnection
+        var redirects = 0
+        val maxRedirects = 6
+
+        while (true) {
+          val url = URL(currentUrl)
+          conn = url.openConnection() as HttpURLConnection
+          conn.instanceFollowRedirects = true
+          conn.setRequestProperty("User-Agent", "p2p-social-android-app")
+          conn.connectTimeout = 15000
+          conn.readTimeout = 30000
+
+          val status = conn.responseCode
+          if (status == HttpURLConnection.HTTP_MOVED_PERM ||
+              status == HttpURLConnection.HTTP_MOVED_TEMP ||
+              status == 307 || status == 308
+          ) {
+            val newUrl = conn.getHeaderField("Location")
+            conn.disconnect()
+            if (newUrl != null && redirects < maxRedirects) {
+              currentUrl = newUrl
+              redirects++
+              continue
+            }
+          }
+          break
+        }
+
+        val otaZip = File(activity.cacheDir, "ota_download.zip")
+        if (otaZip.exists()) otaZip.delete()
+
+        conn.inputStream.use { input ->
+          FileOutputStream(otaZip).use { output ->
+            input.copyTo(output)
+          }
+        }
+
+        Log.i(tag, "OTA zip downloaded (${otaZip.length()} bytes). Unpacking...")
+
+        val uiDir = File(activity.filesDir, "ui")
+        if (!uiDir.exists()) uiDir.mkdirs()
+
+        ZipInputStream(otaZip.inputStream()).use { zip ->
+          var entry = zip.nextEntry
+          while (entry != null) {
+            val name = entry.name
+            val outFile = when {
+              name.startsWith("ui/") -> File(activity.filesDir, name)
+              name.startsWith("backend/") -> File(activity.filesDir, name)
+              else -> File(uiDir, name)
+            }
+            if (entry.isDirectory) {
+              outFile.mkdirs()
+            } else {
+              outFile.parentFile?.mkdirs()
+              FileOutputStream(outFile).use { out ->
+                zip.copyTo(out)
+              }
+            }
+            zip.closeEntry()
+            entry = zip.nextEntry
+          }
+        }
+
+        File(activity.filesDir, ".ota_version").writeText(otaVersion.trim())
+        otaZip.delete()
+
+        Log.i(tag, "OTA update $otaVersion successfully applied to internal storage!")
+        activity.runOnUiThread {
+          webView.evaluateJavascript("window.__onOtaApplied?.('$otaVersion')", null)
+        }
+      } catch (e: Exception) {
+        Log.e(tag, "Failed to apply OTA update", e)
+        activity.runOnUiThread {
+          val errorMsg = JSONObject.quote(e.message ?: "OTA download failed")
+          webView.evaluateJavascript("window.__onOtaError?.($errorMsg)", null)
+        }
+      }
     }
   }
 
