@@ -141,6 +141,7 @@
             <div class="net-action-row">
               <button class="outline btn-sm" id="btn-show-qr">My QR Code</button>
               <button class="outline btn-sm" id="btn-theme-toggle">Theme: Dark</button>
+              <button class="outline btn-sm" id="btn-open-updates">Updates</button>
             </div>
           </div>
         </div>
@@ -249,6 +250,57 @@
         <h2>P2P Network Inspector</h2>
       </div>
       <div class="net-inspector-body" id="network-inspector-content"></div>
+    </dialog>
+
+    <!-- In-App Updates Modal (GitHub Releases) -->
+    <dialog id="update-modal">
+      <div class="modal-header">
+        <button type="button" class="close-btn" data-close-modal>×</button>
+        <h2>App Updates</h2>
+      </div>
+      <div class="update-modal-body">
+        <div class="update-status-row">
+          <div>
+            <div class="update-version-label">Current Version</div>
+            <div class="update-version-val" id="update-current-version">v0.1.0</div>
+          </div>
+          <button type="button" class="btn-sm primary" id="btn-check-updates">Check for Updates</button>
+        </div>
+
+        <div class="update-repo-setting">
+          <label>
+            <span class="label-text">GitHub Repository</span>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input id="update-repo-input" placeholder="creeperkafasi/p2p-social" style="flex:1" onfocus="this.select()" />
+              <button type="button" class="outline btn-sm" id="btn-clear-repo" title="Reset default repo">↺</button>
+            </div>
+          </label>
+        </div>
+
+        <div id="update-info-card" class="update-card" style="display:none">
+          <div class="update-card-header">
+            <span class="update-badge" id="update-card-badge">Update Available</span>
+            <span class="update-file-size muted" id="update-file-size"></span>
+          </div>
+          <h3 id="update-card-title">v0.2.0</h3>
+          <div class="update-notes-wrapper" id="update-card-notes"></div>
+          
+          <div id="update-progress-box" class="update-progress-container" style="display:none">
+            <div class="update-progress-bar-bg">
+              <div class="update-progress-bar-fill" id="update-progress-fill" style="width:0%"></div>
+            </div>
+            <div class="update-progress-text" id="update-progress-text">Downloading… 0%</div>
+          </div>
+
+          <div class="update-actions" id="update-actions-box">
+            <button class="primary" id="btn-start-update">Download &amp; Install</button>
+          </div>
+        </div>
+
+        <div id="update-idle-msg" class="muted center-text" style="margin-top: 16px;">
+          Tap &ldquo;Check for Updates&rdquo; to query GitHub Releases.
+        </div>
+      </div>
     </dialog>
 
     <!-- Lightbox Modal for Images -->

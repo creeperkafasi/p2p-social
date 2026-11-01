@@ -22,6 +22,7 @@ const editProfileDialog = document.getElementById('edit-profile-modal')
 const quoteDialog = document.getElementById('quote-modal')
 const qrDialog = document.getElementById('qr-modal')
 const networkDialog = document.getElementById('network-modal')
+const updateDialog = document.getElementById('update-modal')
 const lightboxDialog = document.getElementById('lightbox')
 const toastEl = document.getElementById('toast')
 
@@ -440,6 +441,7 @@ const views = {
     return `
       <div class="header">
         <span>Home</span>
+        <button class="icon-btn-ghost" id="btn-open-updates" title="In-App Updates">🔄</button>
       </div>
       <div class="tabs-bar">
         <button class="tab-btn${activeSub === 'forYou' ? ' active' : ''}" data-subtab="forYou">For You</button>
@@ -700,7 +702,8 @@ const views = {
     const bannerStyle = prof.banner ? `background-image:url(${prof.banner})` : `background:${bannerGradient(key)}`
 
     const actionButtons = isMine
-      ? `<button class="outline" id="edit-profile">Edit profile</button>`
+      ? `<button class="outline" id="edit-profile">Edit profile</button>
+         <button class="outline" id="btn-open-updates" title="In-App Updates">🔄 Updates</button>`
       : `
         <button class="${isFollowed ? 'outline' : 'primary'}" data-follow="${key}">${isFollowed ? 'Unfollow' : 'Follow'}</button>
         <button class="outline" data-open-dm="${key}" title="Direct Message">💬</button>
@@ -1007,6 +1010,7 @@ document.addEventListener('keydown', (e) => {
     if (networkDialog?.open) networkDialog.close()
     if (editProfileDialog?.open) editProfileDialog.close()
     if (quoteDialog?.open) quoteDialog.close()
+    if (updateDialog?.open) updateDialog.close()
   }
 })
 
@@ -1120,6 +1124,7 @@ document.addEventListener('submit', async (e) => {
     }
 
     if (quoteDialog?.open) quoteDialog.close()
+    if (updateDialog?.open) updateDialog.close()
     toast('Post published!')
   }
 })
@@ -1281,6 +1286,30 @@ document.addEventListener('click', async (e) => {
   // Theme toggle
   if (e.target.closest('#btn-theme-toggle')) {
     toggleTheme()
+    return
+  }
+
+  // App updates
+  if (e.target.closest('#btn-open-updates') || e.target.closest('#btn-net-open-updates')) {
+    openUpdateModal()
+    return
+  }
+  if (e.target.closest('#btn-clear-repo')) {
+    const repoInput = document.getElementById('update-repo-input')
+    if (repoInput) {
+      repoInput.value = DEFAULT_REPO
+      localStorage.setItem('p2p_github_repo', DEFAULT_REPO)
+      repoInput.focus()
+      toast('Reset repo to ' + DEFAULT_REPO)
+    }
+    return
+  }
+  if (e.target.closest('#btn-check-updates')) {
+    checkUpdatesAction(true)
+    return
+  }
+  if (e.target.closest('#btn-start-update')) {
+    startDownloadAction()
     return
   }
 
@@ -1590,9 +1619,212 @@ function openNetworkModal() {
       <div style="max-height:220px;overflow-y:auto">
         ${feedsList}
       </div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+        <span class="muted" style="font-size:13px">App Updates (GitHub)</span>
+        <button type="button" class="btn-sm outline" id="btn-net-open-updates">Check Updates</button>
+      </div>
     </div>`
 
   networkDialog.showModal()
+}
+
+// --- In-App Updates (GitHub Releases) ---
+const DEFAULT_REPO = 'creeperkafasi/p2p-social'
+let availableUpdate = null
+
+function getAppVersion() {
+  if (window.AndroidUpdater?.getAppVersion) {
+    try {
+      return window.AndroidUpdater.getAppVersion()
+    } catch {}
+  }
+  return '0.1.0'
+}
+
+function openUpdateModal() {
+  if (!updateDialog) return
+  const currentVer = getAppVersion()
+  const currentVerEl = document.getElementById('update-current-version')
+  const repoInput = document.getElementById('update-repo-input')
+  if (currentVerEl) currentVerEl.textContent = `v${currentVer}`
+  if (repoInput && !repoInput.value) {
+    repoInput.value = localStorage.getItem('p2p_github_repo') || DEFAULT_REPO
+  }
+  updateDialog.showModal()
+}
+
+window.__onUpdateProgress = (percent, downloaded, total) => {
+  const box = document.getElementById('update-progress-box')
+  const fill = document.getElementById('update-progress-fill')
+  const text = document.getElementById('update-progress-text')
+  if (box) box.style.display = 'flex'
+  if (fill) fill.style.width = `${percent}%`
+  const mb = (bytes) => (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+  if (text) {
+    text.textContent = total > 0
+      ? `Downloading… ${percent}% (${mb(downloaded)} / ${mb(total)})`
+      : `Downloading… ${percent}% (${mb(downloaded)})`
+  }
+}
+
+window.__onUpdateStatus = (status) => {
+  const text = document.getElementById('update-progress-text')
+  const btn = document.getElementById('btn-start-update')
+  if (status === 'permission_required') {
+    toast('Please enable "Install unknown apps" permission to update.')
+    if (text) text.textContent = 'Awaiting installation permission…'
+    if (btn) {
+      btn.disabled = false
+      btn.textContent = 'Open Installer'
+    }
+  } else if (status === 'installing') {
+    toast('Launching system installer…')
+    if (text) text.textContent = 'Installing update…'
+  }
+}
+
+window.__onUpdateError = (err) => {
+  toast('Update failed: ' + err)
+  const btn = document.getElementById('btn-start-update')
+  if (btn) {
+    btn.disabled = false
+    btn.textContent = 'Retry Download'
+  }
+  const text = document.getElementById('update-progress-text')
+  if (text) text.textContent = 'Error: ' + err
+}
+
+async function checkUpdatesAction(interactive = true) {
+  const btn = document.getElementById('btn-check-updates')
+  const repoInput = document.getElementById('update-repo-input')
+  const card = document.getElementById('update-info-card')
+  const idleMsg = document.getElementById('update-idle-msg')
+  const cardTitle = document.getElementById('update-card-title')
+  const cardNotes = document.getElementById('update-card-notes')
+  const fileSizeEl = document.getElementById('update-file-size')
+  const startBtn = document.getElementById('btn-start-update')
+  const progressBox = document.getElementById('update-progress-box')
+
+  let repo = repoInput?.value?.trim() || localStorage.getItem('p2p_github_repo') || DEFAULT_REPO
+  repo = repo.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '')
+  localStorage.setItem('p2p_github_repo', repo)
+
+  if (btn) {
+    btn.disabled = true
+    btn.textContent = 'Checking…'
+  }
+
+  try {
+    let updateInfo
+    if (window.AndroidUpdater?.checkForUpdates) {
+      const raw = window.AndroidUpdater.checkForUpdates(repo)
+      updateInfo = JSON.parse(raw)
+    } else {
+      const current = getAppVersion()
+      const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+        headers: { Accept: 'application/vnd.github.v3+json' }
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status} from GitHub API`)
+      const json = await res.json()
+      const tag = json.tag_name || ''
+      const latest = tag.replace(/^v/, '').trim()
+      const apkAsset = (json.assets || []).find((a) => a.name?.endsWith('.apk'))
+      updateInfo = {
+        success: true,
+        currentVersion: current,
+        latestVersion: latest,
+        tagName: tag,
+        releaseName: json.name || tag,
+        releaseNotes: json.body || '',
+        hasUpdate: isNewer(latest, current),
+        apkUrl: apkAsset?.browser_download_url || json.html_url || '',
+        apkSize: apkAsset?.size || 0
+      }
+    }
+
+    if (!updateInfo.success) {
+      throw new Error(updateInfo.error || 'Failed to check updates')
+    }
+
+    if (updateInfo.hasUpdate) {
+      availableUpdate = updateInfo
+      if (card) card.style.display = 'flex'
+      if (idleMsg) idleMsg.style.display = 'none'
+      if (cardTitle) cardTitle.textContent = `${updateInfo.releaseName || 'Release'} (${updateInfo.tagName})`
+      if (cardNotes) cardNotes.textContent = updateInfo.releaseNotes || 'No release notes provided.'
+      if (fileSizeEl) {
+        fileSizeEl.textContent = updateInfo.apkSize > 0
+          ? `${(updateInfo.apkSize / (1024 * 1024)).toFixed(1)} MB`
+          : ''
+      }
+      if (startBtn) {
+        startBtn.disabled = false
+        startBtn.textContent = 'Download & Install'
+      }
+      if (progressBox) progressBox.style.display = 'none'
+      if (interactive) {
+        openUpdateModal()
+        toast(`New update available: ${updateInfo.tagName}`)
+      }
+    } else {
+      availableUpdate = null
+      if (card) card.style.display = 'none'
+      if (idleMsg) {
+        idleMsg.style.display = 'block'
+        idleMsg.textContent = `You are on the latest version (v${updateInfo.currentVersion}).`
+      }
+      if (interactive) toast('App is up to date!')
+    }
+  } catch (err) {
+    if (interactive) toast('Update check: ' + err.message)
+    if (idleMsg) {
+      idleMsg.style.display = 'block'
+      idleMsg.textContent = 'Could not fetch updates: ' + err.message
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false
+      btn.textContent = 'Check for Updates'
+    }
+  }
+}
+
+function isNewer(latest, current) {
+  if (!latest || !current || latest === current) return false
+  const l = latest.split('.').map((n) => parseInt(n, 10) || 0)
+  const c = current.split('.').map((n) => parseInt(n, 10) || 0)
+  const len = Math.max(l.length, c.length)
+  for (let i = 0; i < len; i++) {
+    const lPart = l[i] || 0
+    const cPart = c[i] || 0
+    if (lPart > cPart) return true
+    if (lPart < cPart) return false
+  }
+  return false
+}
+
+function startDownloadAction() {
+  if (!availableUpdate?.apkUrl) {
+    toast('No download URL available for this update.')
+    return
+  }
+  const btn = document.getElementById('btn-start-update')
+  if (btn) {
+    btn.disabled = true
+    btn.textContent = 'Downloading…'
+  }
+  const box = document.getElementById('update-progress-box')
+  if (box) box.style.display = 'flex'
+
+  if (window.AndroidUpdater?.downloadAndInstall) {
+    window.AndroidUpdater.downloadAndInstall(availableUpdate.apkUrl)
+  } else {
+    window.open(availableUpdate.apkUrl, '_blank')
+    if (btn) {
+      btn.disabled = false
+      btn.textContent = 'Download in Browser'
+    }
+  }
 }
 
 // Relative timestamps update every 20 seconds

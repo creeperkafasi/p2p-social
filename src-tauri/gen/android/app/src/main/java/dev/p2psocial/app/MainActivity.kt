@@ -3,6 +3,7 @@ package dev.p2psocial.app
 import android.os.Bundle
 import android.system.Os
 import android.util.Log
+import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
 import java.io.File
 import java.io.FileOutputStream
@@ -15,13 +16,24 @@ class MainActivity : TauriActivity() {
     super.onCreate(savedInstanceState)
   }
 
+  override fun onWebViewCreate(webView: WebView) {
+    super.onWebViewCreate(webView)
+    Log.i("p2p-social", "Registering AndroidUpdater JavaScript interface...")
+    webView.addJavascriptInterface(AndroidUpdateManager(this, webView), "AndroidUpdater")
+  }
+
   private fun setupP2PEnvironment() {
     val filesPath = filesDir.absolutePath
     val storageDir = File(filesDir, "storage")
     if (!storageDir.exists()) storageDir.mkdirs()
 
     val backendMarker = File(filesDir, "backend/index.js")
-    val versionMarker = File(filesDir, ".bundle_v${BuildConfig.VERSION_CODE}")
+    val lastUpdateTime = try {
+      packageManager.getPackageInfo(packageName, 0).lastUpdateTime
+    } catch (_: Exception) {
+      0L
+    }
+    val versionMarker = File(filesDir, ".bundle_${BuildConfig.VERSION_CODE}_$lastUpdateTime")
     if (!versionMarker.exists() || !backendMarker.exists()) {
       Log.i("p2p-social", "Extracting backend bundle from assets...")
       try {

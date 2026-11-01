@@ -9,7 +9,7 @@
   "app": {
     "withGlobalTauri": true,
     "windows": [{ "title": "p2p-social", "width": 1000, "height": 760, "minWidth": 420 }],
-    "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" }
+    "security": { "csp": "default-src 'self' https://api.github.com https://github.com https://*.githubusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.github.com https://github.com https://*.githubusercontent.com;" }
   },
   "bundle": {
     "active": true,

@@ -36,6 +36,10 @@ const swarm = new Hyperswarm({ bootstrap })
 const feeds = new Map() // hex key -> feed index
 const channels = new Set()
 let me = null
+let readyResolve
+const readyPromise = new Promise((resolve) => {
+  readyResolve = resolve
+})
 
 function log(...args) {
   console.error('[backend]', ...args)
@@ -81,10 +85,12 @@ function emptyIndex(core) {
 }
 
 async function openFeed(key) {
-  const hex = b4a.toString(key, 'hex')
+  if (!key) return null
+  const buf = typeof key === 'string' ? b4a.from(key, 'hex') : key
+  const hex = b4a.toString(buf, 'hex')
   if (feeds.has(hex)) return feeds.get(hex)
 
-  const core = store.get({ key, valueEncoding: 'json' })
+  const core = store.get({ key: buf, valueEncoding: 'json' })
   const feed = emptyIndex(core)
   feeds.set(hex, feed)
   await core.ready()
@@ -92,7 +98,7 @@ async function openFeed(key) {
   core.on('append', () => index(hex))
   core.download({ start: 0, end: -1 }) // keep the whole feed, live
   index(hex)
-  broadcastKeys([key])
+  broadcastKeys([buf])
   saveKnown()
   return feed
 }
@@ -249,14 +255,17 @@ function apply(feed, seq, e) {
 
 let stateTimer = null
 function scheduleState() {
+  if (!me || !me.key) return
   if (stateTimer) return
   stateTimer = setTimeout(() => {
     stateTimer = null
-    send(snapshot())
+    const s = snapshot()
+    if (s) send(s)
   }, 100)
 }
 
 function snapshot() {
+  if (!me || !me.key) return null
   const myHex = b4a.toString(me.key, 'hex')
   const myFeed = feeds.get(myHex) || {
     profile: null,
@@ -471,7 +480,7 @@ function snapshot() {
 // --- discovery ---------------------------------------------------------
 
 function knownKeys() {
-  return [...feeds.values()].map((f) => f.core.key)
+  return [...feeds.values()].map((f) => f.core.key).filter(Boolean)
 }
 
 function broadcastKeys(keys) {
@@ -503,14 +512,15 @@ swarm.on('connection', (conn, info) => {
   channel.open()
 
   conn.on('error', noop)
-  conn.on('close', scheduleState)
-  log('peer connected', b4a.toString(info.publicKey, 'hex').slice(0, 8))
-  scheduleState()
+  conn.on('close', () => { if (me && me.key) scheduleState() })
+  log('peer connected', info.publicKey ? b4a.toString(info.publicKey, 'hex').slice(0, 8) : 'unknown')
+  if (me && me.key) scheduleState()
 })
 
 // --- commands from the UI ----------------------------------------------
 
 async function handle(msg) {
+  await readyPromise
   const ts = Date.now()
   switch (msg.cmd) {
     case 'post': {
@@ -649,6 +659,7 @@ async function main() {
   feeds.set(b4a.toString(me.key, 'hex'), feed)
   me.on('append', () => index(b4a.toString(me.key, 'hex')))
   await index(b4a.toString(me.key, 'hex'))
+  readyResolve()
 
   // Re-open every feed we've seen before so it keeps syncing.
   for (const k of loadKnown()) openFeed(b4a.from(k, 'hex')).catch(noop)
