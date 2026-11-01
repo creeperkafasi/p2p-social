@@ -288,6 +288,154 @@ function quoteEmbedHtml(quoteOfId) {
     </div>`
 }
 
+// --- Client-Side FYP, Tokenizer & Taste Vector Engine ---
+
+const CLIENT_STOP_WORDS = new Set([
+  'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'aren', 'as', 'at',
+  'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by',
+  'can', 'could', 'did', 'do', 'does', 'doing', 'down', 'during',
+  'each', 'few', 'for', 'from', 'further', 'had', 'has', 'have', 'having', 'he', 'her', 'here', 'hers', 'him', 'his', 'how',
+  'if', 'in', 'into', 'is', 'it', 'its', 'just', 'me', 'more', 'most', 'my', 'no', 'nor', 'not', 'now', 'of', 'off', 'on', 'or', 'our', 'out', 'own',
+  'she', 'so', 'some', 'such', 'than', 'that', 'the', 'their', 'them', 'then', 'there', 'these', 'they', 'this', 'those', 'to', 'too', 'up', 'very', 'was', 'we', 'were', 'what', 'when', 'where', 'which', 'while', 'who', 'why', 'with', 'you', 'your',
+  'ama', 'ancak', 'artik', 'ben', 'beni', 'benim', 'beri', 'bile', 'bir', 'biri', 'birkac', 'biz', 'bize', 'bizi', 'bizim', 'boyle', 'bu', 'buna', 'bunda', 'bundan', 'bunu', 'bunun', 'burada', 'cunku', 'da', 'daha', 'de', 'degil', 'demek', 'diye', 'en', 'fakat', 'gibi', 'gore', 'hem', 'hep', 'hepsi', 'her', 'herkes', 'hic', 'icin', 'ile', 'ilgili', 'kadar', 'kendi', 'kendisi', 'ki', 'kim', 'nasil', 'ne', 'neden', 'nerede', 'olan', 'olarak', 'oldu', 'olmak', 'olur', 'ona', 'ondan', 'onlar', 'onu', 'onun', 'oysa', 'oyle', 'pek', 'sadece', 'sanki', 'sen', 'seni', 'senin', 'siz', 'sizi', 'sizin', 'sonra', 'sey', 'simdi', 'su', 'suna', 'sunu', 'tum', 'var', 've', 'veya', 'ya', 'yani', 'yok', 'zaten'
+])
+
+function extractClientTokens(text) {
+  if (!text || typeof text !== 'string') return []
+  const cleaned = text
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/@\S+/g, ' ')
+    .normalize('NFKC')
+    .toLowerCase()
+  const words = cleaned.match(/[\p{L}\p{N}]+/gu) || []
+  const tokens = []
+  const seen = new Set()
+  for (const w of words) {
+    if (w.length < 3 || w.length > 25) continue
+    if (CLIENT_STOP_WORDS.has(w)) continue
+    if (!seen.has(w)) {
+      seen.add(w)
+      tokens.push(w)
+      if (tokens.length >= 20) break
+    }
+  }
+  return tokens
+}
+
+let revealedPosts = new Set()
+
+function getTasteVector() {
+  try {
+    return JSON.parse(localStorage.getItem('p2p_taste_vector') || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function saveTasteVector(v) {
+  try {
+    const entries = Object.entries(v).sort((a, b) => b[1] - a[1]).slice(0, 120)
+    localStorage.setItem('p2p_taste_vector', JSON.stringify(Object.fromEntries(entries)))
+  } catch {}
+}
+
+function recordTaste(tokens, weight) {
+  if (!Array.isArray(tokens) || !tokens.length) return
+  const taste = getTasteVector()
+  for (const t of tokens) {
+    if (typeof t !== 'string') continue
+    const tok = t.toLowerCase()
+    taste[tok] = (taste[tok] || 0) + weight
+  }
+  saveTasteVector(taste)
+}
+
+function computeFypScore(post, taste) {
+  const now = Date.now()
+  const ageHours = Math.max(0, (now - (post.ts || now)) / 3600000)
+  const recency = 1 / (1 + Math.pow(ageHours / 36, 1.3))
+
+  let affinity = 0
+  if (Array.isArray(post.tokens)) {
+    for (const t of post.tokens) {
+      const w = taste[t.toLowerCase()] || 0
+      affinity += Math.min(w, 8.0)
+    }
+  }
+
+  const likeCnt = state?.likes?.[post.id] || 0
+  const repostCnt = state?.reposts?.[post.id] || 0
+  const cleanViewCnt = post.cleanViewCount || 0
+  const engagement = Math.log2(1 + likeCnt * 2.0 + repostCnt * 3.0 + cleanViewCnt * 0.3)
+
+  const prof = state?.profiles?.[post.author]
+  const repScore = prof?.reputation?.score || 0
+  const repTrust = prof?.reputation?.trust !== undefined ? prof.reputation.trust : 100
+  const repBonus = Math.min(repScore / 20.0, 3.0)
+  const trustMultiplier = repTrust < 60 ? (repTrust / 100) : 1.0
+  const reportPenalty = post.reportCount ? Math.pow(0.5, post.reportCount) : 1.0
+
+  return recency * (affinity * 2.5 + engagement + repBonus + 1.0) * trustMultiplier * reportPenalty
+}
+
+function computeTrendingScore(post) {
+  const now = Date.now()
+  const ageHours = Math.max(0, (now - (post.ts || now)) / 3600000)
+  const likeCnt = state?.likes?.[post.id] || 0
+  const repostCnt = state?.reposts?.[post.id] || 0
+  const cleanViewCnt = post.cleanViewCount || 0
+  return (likeCnt * 2.5 + repostCnt * 3.5 + cleanViewCnt * 0.4) / Math.pow(ageHours + 2, 1.4)
+}
+
+// Clean View Tracker: Lurkers who dwell on a post >= 1.5s without reporting it
+const cleanViewTimers = new Map()
+const cleanViewObserved = new Set()
+let postObserver = null
+
+function setupPostIntersectionObserver() {
+  if (postObserver) postObserver.disconnect()
+  if (typeof IntersectionObserver === 'undefined') return
+
+  postObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const el = entry.target
+        const postId = el.dataset.thread
+        if (!postId || cleanViewObserved.has(postId)) continue
+
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+          if (!cleanViewTimers.has(postId)) {
+            const timer = setTimeout(() => {
+              cleanViewTimers.delete(postId)
+              if (!cleanViewObserved.has(postId)) {
+                cleanViewObserved.add(postId)
+                const p = (state?.posts || []).find((x) => x.id === postId)
+                if (p) {
+                  if (p.tokens && p.tokens.length) {
+                    recordTaste(p.tokens, 0.5)
+                  }
+                  send({ cmd: 'clean_view', id: postId })
+                }
+              }
+            }, 1500)
+            cleanViewTimers.set(postId, timer)
+          }
+        } else {
+          if (cleanViewTimers.has(postId)) {
+            clearTimeout(cleanViewTimers.get(postId))
+            cleanViewTimers.delete(postId)
+          }
+        }
+      }
+    },
+    { threshold: [0.5] }
+  )
+
+  document.querySelectorAll('article.post[data-thread]').forEach((el) => {
+    postObserver.observe(el)
+  })
+}
+
 function postHtml(p, opts = {}) {
   const { focus = false, repostedBy = null } = opts
   const liked = state?.likedByMe?.includes(p.id)
@@ -295,6 +443,42 @@ function postHtml(p, opts = {}) {
   const bookmarked = state?.bookmarkedByMe?.includes(p.id)
   const isMine = p.author === state?.me
   const parent = p.replyTo && state?.posts?.find((x) => x.id === p.replyTo)
+
+  // Community Flagged Post Blur / Warning
+  if (p.flagged && !revealedPosts.has(p.id)) {
+    const reasons = p.flagReasons ? Object.keys(p.flagReasons).join(', ') : 'community reports'
+    return `
+      <div class="flagged-post-card" data-flagged-id="${p.id}">
+        <div class="flagged-banner">
+          <div class="flagged-text">
+            <strong>⚠️ Content Flagged by Community</strong>
+            <div class="muted" style="font-size:12px">Hidden due to peer reports (${esc(reasons)}).</div>
+          </div>
+          <button type="button" class="btn-sm outline" data-reveal-flagged="${p.id}">Reveal</button>
+        </div>
+      </div>`
+  }
+
+  // Author Sovereign Trust Badge
+  const prof = state?.profiles?.[p.author]
+  const rep = prof?.reputation
+  let trustBadge = ''
+  if (rep) {
+    let trustClass = ''
+    let trustIcon = '🛡️'
+    if (rep.trust < 60) {
+      trustClass = 'danger'
+      trustIcon = '⚠️'
+    } else if (rep.trust < 85) {
+      trustClass = 'warn'
+      trustIcon = '⚡'
+    }
+    trustBadge = `<span class="author-trust-pill ${trustClass}" title="Decentralized Trust: ${rep.trust}% (${rep.score} pts)">${trustIcon} ${rep.trust}%</span>`
+  }
+
+  const tokensRow = (Array.isArray(p.tokens) && p.tokens.length)
+    ? `<div class="post-tokens-row">${p.tokens.slice(0, 5).map((t) => `<span class="post-token-tag">#${esc(t)}</span>`).join('')}</div>`
+    : ''
 
   const repostHeader = repostedBy
     ? `<div class="post-repost-header">
@@ -315,6 +499,7 @@ function postHtml(p, opts = {}) {
         <div class="post-meta">
           <div class="post-author-row">
             <span class="post-author-name" data-profile="${p.author}">${esc(nameOf(p.author))}</span>
+            ${trustBadge}
             <span class="post-author-key" data-profile="${p.author}">@${short(p.author)}</span>
             <span class="post-dot">·</span>
             <span class="post-time">${ago(p.ts)}</span>
@@ -323,6 +508,7 @@ function postHtml(p, opts = {}) {
         </div>
         ${replyHeader}
         <div class="post-text">${formatText(p.text)}</div>
+        ${tokensRow}
         ${mediaGridHtml(p.media)}
         ${pollHtml(p)}
         ${quoteEmbedHtml(p.quoteOf)}
@@ -431,11 +617,19 @@ const views = {
     const f = following()
     const activeSub = route.sub || 'forYou'
 
-    let posts = []
+    let posts = (state?.posts || []).filter((p) => !isBlocked(p.author) && !isMuted(p.author))
+
     if (activeSub === 'following') {
-      posts = (state?.posts || []).filter((p) => p.author === state?.me || f.has(p.author))
+      posts = posts.filter((p) => p.author === state?.me || f.has(p.author))
+      posts.sort((a, b) => b.ts - a.ts)
+    } else if (activeSub === 'trending') {
+      posts = [...posts].sort((a, b) => computeTrendingScore(b) - computeTrendingScore(a))
+    } else if (activeSub === 'latest') {
+      posts = [...posts].sort((a, b) => b.ts - a.ts)
     } else {
-      posts = (state?.posts || []).filter((p) => !isBlocked(p.author) && !isMuted(p.author))
+      // ⚡ For You: Algorithmic ranking based on sovereign taste vector & trust
+      const taste = getTasteVector()
+      posts = [...posts].sort((a, b) => computeFypScore(b, taste) - computeFypScore(a, taste))
     }
 
     return `
@@ -444,15 +638,17 @@ const views = {
         <button class="icon-btn-ghost" id="btn-open-updates" title="In-App Updates">🔄</button>
       </div>
       <div class="tabs-bar">
-        <button class="tab-btn${activeSub === 'forYou' ? ' active' : ''}" data-subtab="forYou">For You</button>
-        <button class="tab-btn${activeSub === 'following' ? ' active' : ''}" data-subtab="following">Following</button>
+        <button class="tab-btn${activeSub === 'forYou' ? ' active' : ''}" data-subtab="forYou">⚡ For You</button>
+        <button class="tab-btn${activeSub === 'trending' ? ' active' : ''}" data-subtab="trending">🔥 Trending</button>
+        <button class="tab-btn${activeSub === 'latest' ? ' active' : ''}" data-subtab="latest">⏱️ Latest</button>
+        <button class="tab-btn${activeSub === 'following' ? ' active' : ''}" data-subtab="following">👥 Following</button>
       </div>
       ${composeHtml()}
       <div class="feed">
         ${
           posts.length
             ? posts.map((p) => postHtml(p)).join('')
-            : `<div class="empty-state">No posts in your feed yet. Switch to "For You" or discover peers in <a href="#explore">Explore</a>!</div>`
+            : `<div class="empty-state">No posts in your feed yet. Discover peers in <a href="#explore">Explore</a>!</div>`
         }
       </div>`
   },
@@ -745,6 +941,24 @@ const views = {
             <span><b>${prof.following?.length || 0}</b> Following</span>
             <span><b>${state?.followers?.[key] || 0}</b> Followers</span>
           </div>
+          ${
+            prof.reputation
+              ? `
+          <div class="reputation-badge-box">
+            <div class="reputation-badge-header">
+              <div class="rep-chip">
+                <span>${prof.reputation.trust >= 90 ? '🛡️' : (prof.reputation.trust < 60 ? '⚠️' : '⚡')} ${prof.reputation.trust}% Sovereign Trust</span>
+                <span class="muted" style="font-weight:400">(${prof.reputation.score} pts)</span>
+              </div>
+            </div>
+            <div class="rep-stats muted">
+              <span>❤️ ${prof.reputation.likes} likes</span> · 
+              <span>👁️ ${prof.reputation.cleanViews} clean views</span>
+              ${prof.reputation.reports > 0 ? ` · <span class="rep-reports">🚩 ${prof.reputation.reports} reports</span>` : ''}
+            </div>
+          </div>`
+              : ''
+          }
         </div>
       </div>
       <div class="tabs-bar">
@@ -929,6 +1143,8 @@ function render() {
   if (dmHistory) {
     dmHistory.scrollTop = dmHistory.scrollHeight
   }
+
+  setupPostIntersectionObserver()
 }
 
 // --- Routing ---
@@ -1107,9 +1323,13 @@ document.addEventListener('submit', async (e) => {
       }
     }
 
+    const tokens = extractClientTokens(text)
+    recordTaste(tokens, 2.5)
+
     send({
       cmd: 'post',
       text,
+      tokens,
       replyTo,
       quoteOf,
       media: draft?.media?.length ? draft.media : undefined,
@@ -1160,12 +1380,25 @@ document.addEventListener('click', async (e) => {
     return
   }
 
+  // Reveal flagged post
+  const revealBtn = e.target.closest('[data-reveal-flagged]')
+  if (revealBtn) {
+    const id = revealBtn.dataset.revealFlagged
+    revealedPosts.add(id)
+    render()
+    return
+  }
+
   // Like
   const likeBtn = e.target.closest('[data-like]')
   if (likeBtn) {
     const id = likeBtn.dataset.like
+    const post = (state?.posts || []).find((p) => p.id === id)
     const isLiked = state?.likedByMe?.includes(id)
     send({ cmd: isLiked ? 'unlike' : 'like', id })
+    if (!isLiked && post?.tokens) {
+      recordTaste(post.tokens, 2.0)
+    }
     return
   }
 
@@ -1183,8 +1416,12 @@ document.addEventListener('click', async (e) => {
   const bookmarkBtn = e.target.closest('[data-bookmark]')
   if (bookmarkBtn) {
     const id = bookmarkBtn.dataset.bookmark
+    const post = (state?.posts || []).find((p) => p.id === id)
     const isBookmarked = state?.bookmarkedByMe?.includes(id)
     send({ cmd: isBookmarked ? 'unbookmark' : 'bookmark', id })
+    if (!isBookmarked && post?.tokens) {
+      recordTaste(post.tokens, 3.0)
+    }
     toast(isBookmarked ? 'Removed from Bookmarks' : 'Saved to Bookmarks!')
     return
   }
@@ -1426,12 +1663,13 @@ document.addEventListener('click', async (e) => {
       `1. Copy post text`,
       `2. Copy author key (@${short(post.author)})`,
       isMine ? `3. Delete post` : `3. ${following().has(post.author) ? 'Unfollow' : 'Follow'} author`,
-      !isMine ? `4. ${isBlocked(post.author) ? 'Unblock' : 'Block'} @${short(post.author)}` : ''
+      !isMine ? `4. ${isBlocked(post.author) ? 'Unblock' : 'Block'} @${short(post.author)}` : '',
+      !isMine ? `5. 🚩 Report post (Spam / Scam / Abuse)` : ''
     ]
       .filter(Boolean)
       .join('\n')
 
-    const choice = prompt(`Post options for ${short(id)}:\n${actions}\n\nEnter number (1-4):`, '1')
+    const choice = prompt(`Post options for ${short(id)}:\n${actions}\n\nEnter number:`, '1')
     if (choice === '1') {
       await navigator.clipboard.writeText(post.text)
       toast('Post text copied!')
@@ -1453,6 +1691,16 @@ document.addEventListener('click', async (e) => {
       const blocked = isBlocked(post.author)
       send({ cmd: blocked ? 'unblock' : 'block', key: post.author })
       toast(blocked ? 'Unblocked' : 'Blocked author!')
+    } else if (choice === '5' && !isMine) {
+      const reasonChoice = prompt(
+        `Select report reason for this post:\n1. Spam or Bot Activity\n2. Scam or Fraud\n3. Abuse or Harassment\n4. Misinformation\n\nEnter number (1-4):`,
+        '1'
+      )
+      const reasonsMap = { '1': 'spam', '2': 'scam', '3': 'abuse', '4': 'misinfo' }
+      const reason = reasonsMap[reasonChoice] || 'spam'
+      toast('⛏️ Verifying Proof of Work for report…')
+      send({ cmd: 'report', id, reason })
+      toast('🚩 Post reported. Community moderation updated.')
     }
     return
   }

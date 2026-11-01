@@ -27,7 +27,7 @@ LATEST_OTA_PATH="dist/ota-bundle.zip"
 
 rm -f "$OTA_PATH" "$LATEST_OTA_PATH"
 
-zip -q -r "$OTA_PATH" ui backend/index.js -x "*.DS_Store" -x "*~"
+zip -q -r "$OTA_PATH" ui backend/index.js backend/pow.js -x "*.DS_Store" -x "*~"
 cp "$OTA_PATH" "$LATEST_OTA_PATH"
 
 echo "========================================="

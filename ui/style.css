@@ -1664,3 +1664,100 @@ dialog::backdrop {
   from { opacity: 0; transform: translate(-50%, 20px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
+
+/* --- FYP, Tokens & Decentralized Reputation Styles --- */
+.author-trust-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background: rgba(46, 204, 113, 0.12);
+  color: #2ecc71;
+  border: 1px solid rgba(46, 204, 113, 0.25);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: help;
+}
+.author-trust-pill.warn {
+  background: rgba(243, 156, 18, 0.12);
+  color: #f39c12;
+  border-color: rgba(243, 156, 18, 0.25);
+}
+.author-trust-pill.danger {
+  background: rgba(231, 76, 60, 0.12);
+  color: #e74c3c;
+  border-color: rgba(231, 76, 60, 0.25);
+}
+
+.post-tokens-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+.post-token-tag {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--bg-hover);
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+
+.reputation-badge-box {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--bg-hover);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reputation-badge-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.rep-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.rep-stats {
+  font-size: 11.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.rep-reports {
+  color: #e74c3c;
+  font-weight: 500;
+}
+
+/* Flagged by Community Warning Banner */
+.flagged-post-card {
+  padding: 14px 16px;
+  background: rgba(231, 76, 60, 0.06);
+  border: 1px dashed rgba(231, 76, 60, 0.35);
+  border-radius: var(--radius-md);
+  margin: 8px 16px;
+}
+.flagged-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.flagged-text strong {
+  font-size: 13.5px;
+  color: #e74c3c;
+}
+.flagged-text div {
+  margin-top: 2px;
+}

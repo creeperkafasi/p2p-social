@@ -13,6 +13,7 @@ const b4a = require('b4a')
 const path = require('bare-path')
 const Pipe = require('bare-pipe')
 const fs = require('bare-fs')
+const { minePoW, verifyPoW, extractTokens, filterValidTokens } = require('./pow.js')
 
 const storage = Bare.argv[2] || path.join('.', 'storage')
 const bootstrap = Bare.argv[3]
@@ -76,6 +77,8 @@ function emptyIndex(core) {
     reposts: new Set(), // post ids ("author:seq")
     follows: new Set(),
     likes: new Set(), // "author:seq"
+    reports: new Map(), // postId -> { reason, ts, weight, verified }
+    cleanViews: new Set(), // post ids
     bookmarks: new Set(),
     blocks: new Set(),
     mutes: new Set(),
@@ -175,6 +178,20 @@ function apply(feed, seq, e) {
           expiresAt: Number(e.poll.expiresAt) || (Number(e.ts) || Date.now()) + 86400000
         }
       }
+
+      // Author-tokenized text with anti-token-stuffing verification:
+      const tokens = Array.isArray(e.tokens) && e.tokens.length
+        ? filterValidTokens(e.tokens, text)
+        : extractTokens(text)
+
+      // Post PoW verification:
+      const authorHex = b4a.toString(feed.core.key, 'hex')
+      const textSnippet = b4a.toString(crypto.hash(b4a.from(text)), 'hex').slice(0, 16)
+      const challenge = `post:${authorHex}:${textSnippet}:${Number(e.ts) || 0}`
+      const hasNonce = e.nonce !== undefined && e.nonce !== null
+      const difficulty = Number(e.difficulty) || 0
+      const powValid = hasNonce ? verifyPoW(challenge, e.nonce, difficulty) : false
+
       feed.posts.push({
         seq,
         text,
@@ -184,6 +201,8 @@ function apply(feed, seq, e) {
         media,
         poll,
         tags,
+        tokens,
+        pow: { verified: powValid, difficulty },
         deleted: false
       })
       break
@@ -207,12 +226,52 @@ function apply(feed, seq, e) {
     case 'unfollow':
       feed.follows.delete(e.key)
       break
-    case 'like':
-      feed.likes.add(e.post)
+    case 'like': {
+      if (typeof e.post === 'string') {
+        const authorHex = b4a.toString(feed.core.key, 'hex')
+        const challenge = `like:${e.post}:${authorHex}`
+        const hasNonce = e.nonce !== undefined && e.nonce !== null
+        const difficulty = Number(e.difficulty) || 0
+        const powValid = hasNonce ? verifyPoW(challenge, e.nonce, difficulty) : true
+        if (powValid) {
+          feed.likes.add(e.post)
+        }
+      }
       break
+    }
     case 'unlike':
-      feed.likes.delete(e.post)
+      if (typeof e.post === 'string') feed.likes.delete(e.post)
       break
+    case 'report': {
+      if (typeof e.post === 'string') {
+        const authorHex = b4a.toString(feed.core.key, 'hex')
+        const reason = String(e.reason || 'spam').slice(0, 30)
+        const challenge = `report:${e.post}:${reason}:${authorHex}`
+        const hasNonce = e.nonce !== undefined && e.nonce !== null
+        const difficulty = Number(e.difficulty) || 0
+        const powValid = hasNonce ? verifyPoW(challenge, e.nonce, difficulty) : false
+        const weight = powValid ? (difficulty >= 14 ? 1.0 : 0.6) : 0.2
+        feed.reports.set(e.post, {
+          reason,
+          ts: Number(e.ts) || 0,
+          weight,
+          verified: powValid
+        })
+      }
+      break
+    }
+    case 'clean_view': {
+      if (typeof e.post === 'string') feed.cleanViews.add(e.post)
+      break
+    }
+    case 'clean_views': {
+      if (Array.isArray(e.posts)) {
+        for (const p of e.posts) {
+          if (typeof p === 'string') feed.cleanViews.add(p)
+        }
+      }
+      break
+    }
     case 'vote':
       if (typeof e.post === 'string') {
         feed.votes.set(e.post, Number(e.option) || 0)
@@ -287,13 +346,12 @@ function snapshot() {
   const hashtagCounts = {}
   const dmsByPeer = {}
   const postReposts = {}
+  const cleanViews = {}
+  const postReports = {}
+  const authorStats = {} // hex -> { likes: 0, cleanViews: 0, reports: 0 }
 
   for (const [hex, feed] of feeds) {
-    profiles[hex] = {
-      ...(feed.profile || { name: '', bio: '', avatar: '', banner: '', location: '', website: '', pinnedPost: null }),
-      length: feed.core.length,
-      following: [...feed.follows]
-    }
+    if (!authorStats[hex]) authorStats[hex] = { likes: 0, cleanViews: 0, reports: 0 }
 
     for (const k of feed.follows) {
       followers[k] = (followers[k] || 0) + 1
@@ -301,6 +359,28 @@ function snapshot() {
 
     for (const id of feed.likes) {
       likes[id] = (likes[id] || 0) + 1
+      const a = id.split(':')[0]
+      if (!authorStats[a]) authorStats[a] = { likes: 0, cleanViews: 0, reports: 0 }
+      authorStats[a].likes++
+    }
+
+    for (const id of feed.cleanViews) {
+      cleanViews[id] = (cleanViews[id] || 0) + 1
+      const a = id.split(':')[0]
+      if (!authorStats[a]) authorStats[a] = { likes: 0, cleanViews: 0, reports: 0 }
+      authorStats[a].cleanViews++
+    }
+
+    for (const [id, rep] of feed.reports) {
+      if (!postReports[id]) postReports[id] = { count: 0, weight: 0, reasons: {} }
+      postReports[id].count++
+      const w = rep.weight || 1.0
+      postReports[id].weight += w
+      postReports[id].reasons[rep.reason] = (postReports[id].reasons[rep.reason] || 0) + 1
+
+      const a = id.split(':')[0]
+      if (!authorStats[a]) authorStats[a] = { likes: 0, cleanViews: 0, reports: 0 }
+      authorStats[a].reports += w
     }
 
     for (const id of feed.reposts) {
@@ -318,7 +398,19 @@ function snapshot() {
     for (const p of feed.posts) {
       if (p.deleted) continue
       const postId = hex + ':' + p.seq
-      rawPosts.push({ id: postId, author: hex, ...p })
+      const repInfo = postReports[postId]
+      const postLikeCount = likes[postId] || 0
+      const isFlagged = repInfo && (repInfo.weight >= 2.5 || (repInfo.weight >= 1.5 && repInfo.weight > postLikeCount))
+
+      rawPosts.push({
+        id: postId,
+        author: hex,
+        ...p,
+        flagged: !!isFlagged,
+        flagReasons: repInfo ? repInfo.reasons : null,
+        reportCount: repInfo ? repInfo.count : 0,
+        cleanViewCount: cleanViews[postId] || 0
+      })
       if (Array.isArray(p.tags)) {
         for (const tag of p.tags) {
           const t = tag.toLowerCase()
@@ -455,6 +547,29 @@ function snapshot() {
   }
   notifications.sort((a, b) => b.ts - a.ts)
 
+  // Build profiles with reputation and trust metrics
+  for (const [hex, feed] of feeds) {
+    const stat = authorStats[hex] || { likes: 0, cleanViews: 0, reports: 0 }
+    const cleanScore = stat.cleanViews * 0.2
+    const rawRep = Math.max(0, stat.likes + cleanScore - (stat.reports * 5.0))
+    const pos = stat.likes + cleanScore + 5
+    const neg = (stat.reports * 5.0) + 5
+    const trust = Math.min(100, Math.max(10, Math.round((pos / (pos + neg)) * 100)))
+
+    profiles[hex] = {
+      ...(feed.profile || { name: '', bio: '', avatar: '', banner: '', location: '', website: '', pinnedPost: null }),
+      length: feed.core.length,
+      following: [...feed.follows],
+      reputation: {
+        score: Math.round(rawRep * 10) / 10,
+        trust,
+        likes: stat.likes,
+        cleanViews: stat.cleanViews,
+        reports: Math.round(stat.reports * 10) / 10
+      }
+    }
+  }
+
   return {
     type: 'state',
     me: myHex,
@@ -463,9 +578,12 @@ function snapshot() {
     posts: rawPosts.slice(0, 1000),
     postReposts,
     likes,
+    cleanViews,
+    postReports,
     reposts,
     followers,
     likedByMe: myFeed.likes ? [...myFeed.likes] : [],
+    reportedByMe: myFeed.reports ? [...myFeed.reports.keys()] : [],
     repostedByMe: myFeed.reposts ? [...myFeed.reposts] : [],
     bookmarkedByMe: myFeed.bookmarks ? [...myFeed.bookmarks] : [],
     blockedByMe: myFeed.blocks ? [...myFeed.blocks] : [],
@@ -519,6 +637,32 @@ swarm.on('connection', (conn, info) => {
 
 // --- commands from the UI ----------------------------------------------
 
+let pendingCleanViews = []
+let cleanViewTimer = null
+function scheduleCleanViewBatch(id) {
+  pendingCleanViews.push(id)
+  if (pendingCleanViews.length >= 10) {
+    flushCleanViews().catch(noop)
+  } else if (!cleanViewTimer) {
+    cleanViewTimer = setTimeout(() => flushCleanViews().catch(noop), 15000)
+  }
+}
+
+async function flushCleanViews() {
+  if (cleanViewTimer) {
+    clearTimeout(cleanViewTimer)
+    cleanViewTimer = null
+  }
+  if (!pendingCleanViews.length || !me) return
+  const batch = [...new Set(pendingCleanViews)]
+  pendingCleanViews = []
+  try {
+    await me.append({ type: 'clean_views', posts: batch, ts: Date.now() })
+  } catch (err) {
+    log('clean views flush error', err.message)
+  }
+}
+
 async function handle(msg) {
   await readyPromise
   const ts = Date.now()
@@ -526,6 +670,20 @@ async function handle(msg) {
     case 'post': {
       const text = String(msg.text || '').trim().slice(0, MAX_POST)
       if (!text && (!msg.media || !msg.media.length) && !msg.poll) return
+
+      // Deterministic tokens with anti-token-stuffing
+      const tokens = Array.isArray(msg.tokens) && msg.tokens.length
+        ? filterValidTokens(msg.tokens, text)
+        : extractTokens(text)
+
+      // Post PoW mining / verification
+      const myHex = b4a.toString(me.key, 'hex')
+      const textSnippet = b4a.toString(crypto.hash(b4a.from(text)), 'hex').slice(0, 16)
+      const challenge = `post:${myHex}:${textSnippet}:${ts}`
+      const pow = (msg.nonce !== undefined && msg.difficulty)
+        ? { nonce: msg.nonce, difficulty: Number(msg.difficulty) }
+        : minePoW(challenge, 10)
+
       const entry = {
         type: 'post',
         text,
@@ -534,7 +692,10 @@ async function handle(msg) {
         quoteOf: msg.quoteOf || undefined,
         media: Array.isArray(msg.media) ? msg.media.slice(0, 4) : undefined,
         poll: msg.poll || undefined,
-        tags: Array.isArray(msg.tags) ? msg.tags : undefined
+        tags: Array.isArray(msg.tags) ? msg.tags : undefined,
+        tokens,
+        nonce: pow.nonce,
+        difficulty: pow.difficulty
       }
       await me.append(entry)
       break
@@ -565,10 +726,42 @@ async function handle(msg) {
       if (typeof msg.id !== 'string') throw new Error('invalid post id')
       await me.append({ type: msg.cmd, post: msg.id, ts })
       break
-    case 'like':
-    case 'unlike':
-      await me.append({ type: msg.cmd, post: msg.id, ts })
+    case 'like': {
+      if (typeof msg.id !== 'string') throw new Error('invalid post id')
+      const myHex = b4a.toString(me.key, 'hex')
+      const challenge = `like:${msg.id}:${myHex}`
+      const pow = (msg.nonce !== undefined && msg.difficulty)
+        ? { nonce: msg.nonce, difficulty: Number(msg.difficulty) }
+        : minePoW(challenge, 10)
+      await me.append({ type: 'like', post: msg.id, nonce: pow.nonce, difficulty: pow.difficulty, ts })
       break
+    }
+    case 'unlike':
+      if (typeof msg.id !== 'string') throw new Error('invalid post id')
+      await me.append({ type: 'unlike', post: msg.id, ts })
+      break
+    case 'report': {
+      if (typeof msg.id !== 'string') throw new Error('invalid post id')
+      const myHex = b4a.toString(me.key, 'hex')
+      const reason = String(msg.reason || 'spam').slice(0, 30)
+      const challenge = `report:${msg.id}:${reason}:${myHex}`
+      const pow = (msg.nonce !== undefined && msg.difficulty)
+        ? { nonce: msg.nonce, difficulty: Number(msg.difficulty) }
+        : minePoW(challenge, 14)
+      await me.append({ type: 'report', post: msg.id, reason, nonce: pow.nonce, difficulty: pow.difficulty, ts })
+      break
+    }
+    case 'clean_view': {
+      if (typeof msg.id !== 'string') throw new Error('invalid post id')
+      const myHex = b4a.toString(me.key, 'hex')
+      const myFeed = feeds.get(myHex)
+      if (myFeed && !myFeed.cleanViews.has(msg.id)) {
+        myFeed.cleanViews.add(msg.id)
+        scheduleCleanViewBatch(msg.id)
+        scheduleState()
+      }
+      break
+    }
     case 'vote':
       if (typeof msg.id !== 'string') throw new Error('invalid post id')
       await me.append({ type: 'vote', post: msg.id, option: Number(msg.option) || 0, ts })
@@ -645,6 +838,7 @@ async function shutdown() {
   if (closing) return
   closing = true
   log('shutting down')
+  await flushCleanViews()
   await swarm.destroy()
   await store.close()
   Bare.exit(0)

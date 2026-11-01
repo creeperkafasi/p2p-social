@@ -49,6 +49,11 @@ if [ ! -f src-tauri/gen/android/local.properties ] && [ -n "$ANDROID_HOME" ]; th
   fi
 fi
 
+LLVM_STRIP="strip"
+if [ -n "$NDK_HOME" ] && [ -f "$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" ]; then
+  LLVM_STRIP="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+fi
+
 # Ensure Bare runtime binaries are present in jniLibs
 mkdir -p src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a
 mkdir -p src-tauri/gen/android/app/src/main/jniLibs/x86_64
@@ -75,7 +80,7 @@ prepare_bare_binary() {
 
   echo "Installing stripped Bare binary into $jni_dir/libbare.so..."
   cp "$mod_bin" "$dest"
-  strip "$dest" 2>/dev/null || true
+  "$LLVM_STRIP" "$dest" 2>/dev/null || strip "$dest" 2>/dev/null || true
   chmod 755 "$dest"
 }
 
@@ -92,7 +97,7 @@ prepare_libcxx() {
     if [ -n "$src" ] && [ -f "$src" ]; then
       echo "Copying libc++_shared.so for $ndk_arch into $jni_dir..."
       cp "$src" "$dest"
-      strip "$dest" 2>/dev/null || true
+      "$LLVM_STRIP" "$dest" 2>/dev/null || strip "$dest" 2>/dev/null || true
     fi
   fi
 }
@@ -100,16 +105,22 @@ prepare_libcxx() {
 prepare_libcxx "aarch64-linux-android" "src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a"
 prepare_libcxx "x86_64-linux-android"  "src-tauri/gen/android/app/src/main/jniLibs/x86_64"
 
-# Ensure backend assets zip is up to date
+# Ensure backend assets zip is up to date (excluding non-android prebuilds to shrink APK)
 mkdir -p src-tauri/gen/android/app/src/main/assets
-echo "Syncing backend assets bundle (backend.zip)..."
+echo "Syncing backend assets bundle (backend.zip, optimized)..."
 zip -q -r -FS src-tauri/gen/android/app/src/main/assets/backend.zip backend node_modules \
   -x "node_modules/@tauri-apps*" \
   -x "node_modules/bare-runtime-*" \
   -x "node_modules/.bin*" \
   -x "node_modules/.package-lock.json" \
   -x "node_modules/qrcode*" \
-  -x "node_modules/esbuild*"
+  -x "node_modules/esbuild*" \
+  -x "*/prebuilds/darwin*" \
+  -x "*/prebuilds/ios*" \
+  -x "*/prebuilds/win32*" \
+  -x "*/prebuilds/linux*" \
+  -x "*/prebuilds/android-arm/*" \
+  -x "*/prebuilds/android-ia32/*"
 
 echo "Running Tauri Android build..."
 npx tauri android build --target "$TARGET" --apk -d --ci
