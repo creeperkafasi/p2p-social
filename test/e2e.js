@@ -1,5 +1,5 @@
 // End-to-end backend test: two Bare backends on a local DHT testnet.
-// Checks discovery, replication, profiles, likes, follows, replies and clean shutdown.
+// Checks discovery, replication, profiles, likes, follows, replies, reposts, polls, DMs and clean shutdown.
 // Run: node test/e2e.js
 const createTestnet = require('hyperdht/testnet')
 const { spawn } = require('child_process')
@@ -46,24 +46,51 @@ function check(ok, label) {
   const b = peer('bob', bootstrap)
 
   await until(() => a.state && b.state)
-  a.cmd({ cmd: 'profile', name: 'Alice' })
-  a.cmd({ cmd: 'post', text: 'hello p2p world' })
+  a.cmd({ cmd: 'profile', name: 'Alice', bio: 'Decentralized hacker', location: 'P2P mesh' })
+  a.cmd({ cmd: 'post', text: 'hello p2p world #tech' })
   b.cmd({ cmd: 'profile', name: 'Bob' })
 
-  await until(() => b.state.posts.some((p) => p.text === 'hello p2p world'))
-  const post = b.state.posts.find((p) => p.text === 'hello p2p world')
+  await until(() => b.state.posts.some((p) => p.text.includes('hello p2p world')))
+  const post = b.state.posts.find((p) => p.text.includes('hello p2p world'))
   check(true, 'bob receives alice post')
 
   b.cmd({ cmd: 'like', id: post.id })
   b.cmd({ cmd: 'follow', key: a.state.me })
+  b.cmd({ cmd: 'repost', id: post.id })
   b.cmd({ cmd: 'post', text: 'gm alice', replyTo: post.id })
 
-  await until(() => a.state.posts.some((p) => p.replyTo === post.id) && a.state.likes[post.id])
+  await until(
+    () =>
+      a.state.posts.some((p) => p.replyTo === post.id) &&
+      a.state.likes[post.id] &&
+      a.state.reposts[post.id]
+  )
   check(a.state.likes[post.id] === 1, 'alice sees the like')
+  check(a.state.reposts[post.id] === 1, 'alice sees the repost')
   check(a.state.followers[a.state.me] === 1, 'alice sees the follower')
   check(a.state.profiles[b.state.me]?.name === 'Bob', 'alice sees bob profile')
   check(true, 'alice sees the reply')
 
+  // Test Poll & Voting
+  a.cmd({
+    cmd: 'post',
+    text: 'Favorite transport?',
+    poll: { question: 'Favorite transport?', options: ['UDX', 'TCP', 'WebRTC'] }
+  })
+  await until(() => b.state.posts.some((p) => p.poll?.question === 'Favorite transport?'))
+  const pollPost = b.state.posts.find((p) => p.poll?.question === 'Favorite transport?')
+  check(true, 'bob sees poll post')
+
+  b.cmd({ cmd: 'vote', id: pollPost.id, option: 0 })
+  await until(() => a.state.pollVotes[pollPost.id]?.counts[0] === 1)
+  check(a.state.pollVotes[pollPost.id]?.total === 1, 'alice sees poll vote from bob')
+
+  // Test DMs
+  b.cmd({ cmd: 'dm', to: a.state.me, text: 'secret message' })
+  await until(() => a.state.dms[b.state.me]?.some((m) => m.text === 'secret message'))
+  check(true, 'alice receives DM from bob')
+
+  // Clean shutdown
   a.stdin.end()
   b.stdin.end()
   await wait(1500)

@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4",
-    "bare": "^1.36.2"
+    "bare": "^1.36.2",
+    "qrcode": "^1.5.4"
   }
 }
