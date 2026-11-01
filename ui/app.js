@@ -43,22 +43,37 @@ function send(obj) {
   return invoke('send', { msg: JSON.stringify(obj) }).catch((err) => toast(String(err)))
 }
 
-listen('backend', (event) => {
-  let msg
+let listening = false
+async function initBackendListeners() {
+  if (listening || !tauri?.event?.listen) return
   try {
-    msg = JSON.parse(event.payload)
-  } catch {
-    return
+    await listen('backend', (event) => {
+      let msg
+      try {
+        msg = JSON.parse(event.payload)
+      } catch {
+        return
+      }
+      if (msg.type === 'state') {
+        state = msg
+        render()
+      } else if (msg.type === 'error') {
+        toast(msg.message)
+      }
+    })
+    await listen('backend-exit', () => toast('Backend stopped. Check terminal logs.'))
+    listening = true
+  } catch (err) {
+    console.warn('Backend listen pending page readiness, retrying:', err)
+    setTimeout(initBackendListeners, 300)
   }
-  if (msg.type === 'state') {
-    state = msg
-    render()
-  } else if (msg.type === 'error') {
-    toast(msg.message)
-  }
-})
+}
 
-listen('backend-exit', () => toast('Backend stopped. Check terminal logs.'))
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initBackendListeners)
+} else {
+  initBackendListeners()
+}
 
 // --- Helpers ---
 

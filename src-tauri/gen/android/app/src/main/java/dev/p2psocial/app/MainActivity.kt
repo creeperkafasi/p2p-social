@@ -21,7 +21,8 @@ class MainActivity : TauriActivity() {
     if (!storageDir.exists()) storageDir.mkdirs()
 
     val backendMarker = File(filesDir, "backend/index.js")
-    if (!backendMarker.exists()) {
+    val versionMarker = File(filesDir, ".bundle_v${BuildConfig.VERSION_CODE}")
+    if (!versionMarker.exists() || !backendMarker.exists()) {
       Log.i("p2p-social", "Extracting backend bundle from assets...")
       try {
         assets.open("backend.zip").use { input ->
@@ -42,6 +43,7 @@ class MainActivity : TauriActivity() {
             }
           }
         }
+        versionMarker.createNewFile()
         Log.i("p2p-social", "Backend extraction complete.")
       } catch (e: Exception) {
         Log.e("p2p-social", "Failed to extract backend bundle", e)
@@ -49,11 +51,16 @@ class MainActivity : TauriActivity() {
     }
 
     val nativeLibDir = applicationInfo.nativeLibraryDir
-    val bareBin = File(nativeLibDir, "libbare.so").absolutePath
-    Log.i("p2p-social", "Setting BARE_BIN=$bareBin, ROOT=$filesPath, STORAGE=${storageDir.absolutePath}")
+    val bareBin = File(nativeLibDir, "libbare.so")
+    Log.i("p2p-social", "nativeLibraryDir: $nativeLibDir (libbare.so exists: ${bareBin.exists()})")
+    if (!bareBin.exists()) {
+      val files = File(nativeLibDir).listFiles()?.map { it.name }
+      Log.w("p2p-social", "nativeLibDir listing: $files")
+    }
 
     try {
-      Os.setenv("BARE_BIN", bareBin, true)
+      Os.setenv("BARE_BIN", bareBin.absolutePath, true)
+      Os.setenv("LD_LIBRARY_PATH", nativeLibDir, true)
       Os.setenv("P2P_SOCIAL_ROOT", filesPath, true)
       Os.setenv("P2P_SOCIAL_STORAGE", storageDir.absolutePath, true)
     } catch (e: Exception) {

@@ -82,6 +82,24 @@ prepare_bare_binary() {
 prepare_bare_binary "arm64" "src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a"
 prepare_bare_binary "x64"   "src-tauri/gen/android/app/src/main/jniLibs/x86_64"
 
+prepare_libcxx() {
+  local ndk_arch="$1"
+  local jni_dir="$2"
+  local dest="$jni_dir/libc++_shared.so"
+  if [ -f "$dest" ]; then return 0; fi
+  if [ -n "$NDK_HOME" ]; then
+    local src=$(find "$NDK_HOME" -name "libc++_shared.so" 2>/dev/null | grep "$ndk_arch" | head -n 1 || true)
+    if [ -n "$src" ] && [ -f "$src" ]; then
+      echo "Copying libc++_shared.so for $ndk_arch into $jni_dir..."
+      cp "$src" "$dest"
+      strip "$dest" 2>/dev/null || true
+    fi
+  fi
+}
+
+prepare_libcxx "aarch64-linux-android" "src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a"
+prepare_libcxx "x86_64-linux-android"  "src-tauri/gen/android/app/src/main/jniLibs/x86_64"
+
 # Ensure backend assets zip is up to date
 mkdir -p src-tauri/gen/android/app/src/main/assets
 echo "Syncing backend assets bundle (backend.zip)..."

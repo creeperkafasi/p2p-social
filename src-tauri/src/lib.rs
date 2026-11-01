@@ -56,6 +56,9 @@ fn spawn_backend(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&storage)?;
 
     let mut cmd = Command::new(&bare);
+    if let Some(parent) = bare.parent() {
+        cmd.env("LD_LIBRARY_PATH", parent);
+    }
     cmd.arg(root.join("backend/index.js")).arg(&storage);
     if let Ok(bootstrap) = std::env::var("P2P_SOCIAL_BOOTSTRAP") {
         cmd.arg(bootstrap);

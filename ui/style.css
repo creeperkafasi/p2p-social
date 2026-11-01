@@ -1403,7 +1403,15 @@ dialog::backdrop {
 /* Native-feel Mobile Phone Layout (Android / iOS) */
 @media (max-width: 600px) {
   body {
+    padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+  }
+  .main-header {
+    padding-top: calc(14px + env(safe-area-inset-top, 0px));
+  }
+  dialog {
+    margin: max(16px, env(safe-area-inset-top, 16px)) auto auto auto;
+    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px);
   }
   .layout {
     flex-direction: column;
